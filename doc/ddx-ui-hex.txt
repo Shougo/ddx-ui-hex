@@ -180,9 +180,9 @@ winWidth	(number)
 
 ==============================================================================
 EXAMPLES                                                 *ddx-ui-hex-examples*
->
+>vim
 	call ddx#custom#patch_global({
-	    \ 'ui': 'hex',
+	    \   'ui': 'hex',
 	    \ })
 
 	autocmd FileType ddx-hex call s:ddx_hex_my_settings()
@@ -195,7 +195,7 @@ EXAMPLES                                                 *ddx-ui-hex-examples*
 <
 
 ==============================================================================
-FREQUENTLY ASKED QUESTIONS (FAQ)			*ddx-ui-hex-faq*
+FREQUENTLY ASKED QUESTIONS (FAQ)                              *ddx-ui-hex-faq*
 
 ==============================================================================
 COMPATIBILITY                                       *ddx-ui-hex-compatibility*
