@@ -53,6 +53,7 @@ export type Params = {
 export class Ui extends BaseUi<Params> {
   #buffers: Record<string, number> = {};
   #namespace: number = 0;
+  #offset: number = 0;
 
   override async redraw(args: {
     denops: Denops;
@@ -62,6 +63,8 @@ export class Ui extends BaseUi<Params> {
     uiOptions: UiOptions;
     uiParams: Params;
   }): Promise<void> {
+    this.#offset = args.buffer.offset;
+
     function arrayBufferToHex(buffer: Uint8Array) {
       return Array.prototype.map.call(
         new Uint8Array(buffer),
@@ -204,6 +207,27 @@ export class Ui extends BaseUi<Params> {
     }
 
     await fn.setbufvar(args.denops, bufnr, "&modified", modified);
+  }
+
+  override async jump(args: {
+    denops: Denops;
+    context: Context;
+    options: DdxOptions;
+    uiParams: Params;
+    address: number;
+  }): Promise<void> {
+    // Move to the UI window.
+    const bufnr = this.#buffers[args.options.name];
+    if (!bufnr) {
+      return;
+    }
+
+    await fn.win_gotoid(
+      args.denops,
+      await fn.bufwinid(args.denops, bufnr),
+    );
+
+    await searchAddress(args.denops, this.#offset, args.address);
   }
 
   override async quit(args: {
@@ -535,4 +559,29 @@ function parseStrictInt(str: string, radix: number = 10): number {
   }
   const n = parseInt(str, radix);
   return Number.isNaN(n) ? NaN : n;
+}
+
+async function searchAddress(
+  denops: Denops,
+  offset: number,
+  address: number,
+) {
+  await fn.cursor(denops, 1, 1);
+
+  // Parse address number.
+  const row = Math.floor((address - offset) / 0x10) + 1;
+  if (row < 0) {
+    return;
+  }
+
+  const baseAddress = ("00000000" + address.toString()).slice(-8);
+  const addressOffset = address & 0x0f;
+
+  const col = addressOffset * 3 + baseAddress.length + 3;
+
+  await fn.cursor(
+    denops,
+    row,
+    col,
+  );
 }
