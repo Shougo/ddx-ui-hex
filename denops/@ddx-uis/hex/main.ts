@@ -38,6 +38,14 @@ export type SaveParams = {
   path?: string;
 };
 
+type Operation = "change" | "insert" | "remove";
+
+type OperationHistory = {
+  operation: Operation;
+  address: number;
+  value: unknown;
+};
+
 export type Params = {
   encoding: "utf-8";
   floatingBorder: FloatingBorder;
@@ -54,6 +62,7 @@ export class Ui extends BaseUi<Params> {
   #buffers: Record<string, number> = {};
   #namespace: number = 0;
   #offset: number = 0;
+  #histories: OperationHistory[] = [];
 
   override async redraw(args: {
     denops: Denops;
@@ -265,8 +274,8 @@ export class Ui extends BaseUi<Params> {
         await args.denops.cmd(
           args.context.bufNr == this.#buffers[args.options.name] ||
             args.context.bufNr <= 0
-            ? "enew"
-            : `buffer ${args.context.bufNr}`,
+            ? "enew!"
+            : `buffer! ${args.context.bufNr}`,
         );
       } else {
         await args.denops.cmd("silent! close!");
@@ -315,6 +324,12 @@ export class Ui extends BaseUi<Params> {
       const bufnr = this.#buffers[args.options.name];
       await fn.setbufvar(args.denops, bufnr, "&modified", true);
 
+      this.#histories.push({
+        operation: "change",
+        address,
+        value,
+      });
+
       return ActionFlags.Redraw;
     },
     insert: async (args: {
@@ -351,10 +366,17 @@ export class Ui extends BaseUi<Params> {
         return ActionFlags.Persist;
       }
 
-      args.buffer.insert(address, new Uint8Array([value]));
+      const insertValue = new Uint8Array([value]);
+      args.buffer.insert(address, insertValue);
 
       const bufnr = this.#buffers[args.options.name];
       await fn.setbufvar(args.denops, bufnr, "&modified", true);
+
+      this.#histories.push({
+        operation: "insert",
+        address,
+        value: insertValue,
+      });
 
       return ActionFlags.Redraw;
     },
@@ -379,6 +401,12 @@ export class Ui extends BaseUi<Params> {
 
       const bufnr = this.#buffers[args.options.name];
       await fn.setbufvar(args.denops, bufnr, "&modified", true);
+
+      this.#histories.push({
+        operation: "remove",
+        address,
+        value: args.buffer.getByte(address),
+      });
 
       return ActionFlags.Redraw;
     },
@@ -523,16 +551,12 @@ export class Ui extends BaseUi<Params> {
       uiParams.encoding,
     ) as string[];
 
-    return parseStrictInt(String(addressString), 16);
+    return parseStrictInt(addressString);
   }
 }
 
 function parseStrictInt(str: string, radix: number = 10): number {
   if (typeof str !== "string" || str.trim() === "") {
-    return NaN;
-  }
-
-  if (!/^-?\d+$/.test(str.trim())) {
     return NaN;
   }
 
