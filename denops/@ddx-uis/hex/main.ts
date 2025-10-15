@@ -38,12 +38,25 @@ export type SaveParams = {
   path?: string;
 };
 
-type Operation = "change" | "insert" | "remove";
+type OperationHistory = ChangeHistory | InsertHistory | RemoveHistory;
 
-type OperationHistory = {
-  operation: Operation;
+type ChangeHistory = {
+  operation: "change";
   address: number;
-  value: unknown;
+  oldValue: number;
+  newValue: number;
+};
+
+type InsertHistory = {
+  operation: "insert";
+  address: number;
+  newValue: Uint8Array;
+};
+
+type RemoveHistory = {
+  operation: "remove";
+  address: number;
+  oldValue: number;
 };
 
 export type Params = {
@@ -319,6 +332,8 @@ export class Ui extends BaseUi<Params> {
         return ActionFlags.Persist;
       }
 
+      const oldValue = args.buffer.getByte(address);
+
       args.buffer.change(address, value);
 
       const bufnr = this.#buffers[args.options.name];
@@ -327,7 +342,8 @@ export class Ui extends BaseUi<Params> {
       this.#histories.push({
         operation: "change",
         address,
-        value,
+        oldValue,
+        newValue: value,
       });
 
       return ActionFlags.Redraw;
@@ -375,7 +391,7 @@ export class Ui extends BaseUi<Params> {
       this.#histories.push({
         operation: "insert",
         address,
-        value: insertValue,
+        newValue: insertValue,
       });
 
       return ActionFlags.Redraw;
@@ -397,16 +413,16 @@ export class Ui extends BaseUi<Params> {
         return ActionFlags.Persist;
       }
 
+      this.#histories.push({
+        operation: "remove",
+        address,
+        oldValue: args.buffer.getByte(address),
+      });
+
       args.buffer.remove(address);
 
       const bufnr = this.#buffers[args.options.name];
       await fn.setbufvar(args.denops, bufnr, "&modified", true);
-
-      this.#histories.push({
-        operation: "remove",
-        address,
-        value: args.buffer.getByte(address),
-      });
 
       return ActionFlags.Redraw;
     },
@@ -429,7 +445,7 @@ export class Ui extends BaseUi<Params> {
       const bufnr = this.#buffers[args.options.name];
       await fn.setbufvar(args.denops, bufnr, "&modified", false);
 
-      return ActionFlags.None;
+      return ActionFlags.Persist;
     },
     quit: async (args: {
       denops: Denops;
@@ -445,6 +461,43 @@ export class Ui extends BaseUi<Params> {
       });
 
       return ActionFlags.None;
+    },
+    undo: async (args: {
+      denops: Denops;
+      context: Context;
+      options: DdxOptions;
+      buffer: DdxBuffer;
+      uiParams: Params;
+    }) => {
+      const history = this.#histories.pop();
+      if (!history) {
+        return ActionFlags.Persist;
+      }
+
+      switch (history.operation) {
+        case "change":
+          args.buffer.change(history.address, history.oldValue);
+          break;
+        case "insert":
+          args.buffer.remove(history.address, history.newValue.length);
+          break;
+        case "remove":
+          args.buffer.insert(
+            history.address,
+            Uint8Array.from([history.oldValue]),
+          );
+          break;
+      }
+
+      const bufnr = this.#buffers[args.options.name];
+      await fn.setbufvar(
+        args.denops,
+        bufnr,
+        "&modified",
+        this.#histories.length > 0,
+      );
+
+      return ActionFlags.Redraw;
     },
   };
 
@@ -551,7 +604,7 @@ export class Ui extends BaseUi<Params> {
       uiParams.encoding,
     ) as string[];
 
-    return parseStrictInt(addressString);
+    return Number(addressString);
   }
 }
 

@@ -65,6 +65,10 @@ quit
 remove
 		Remove current value.
 
+                                                      *ddx-ui-hex-action-undo*
+undo
+		Undo the last change.
+
                                                       *ddx-ui-hex-action-save*
 save
 		params:
