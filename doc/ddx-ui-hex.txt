@@ -61,6 +61,11 @@ insert
 quit
 		Quit the UI window.
 
+                                                      *ddx-ui-hex-action-redo*
+redo
+		Undo the last undo.
+		NOTE: You cannot change the undo if you have changed buffer.
+
                                                     *ddx-ui-hex-action-remove*
 remove
 		Remove current value.

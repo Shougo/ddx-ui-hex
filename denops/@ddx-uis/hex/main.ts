@@ -76,6 +76,7 @@ export class Ui extends BaseUi<Params> {
   #namespace: number = 0;
   #offset: number = 0;
   #histories: OperationHistory[] = [];
+  #undoHistories: OperationHistory[] = [];
 
   override async redraw(args: {
     denops: Denops;
@@ -334,17 +335,18 @@ export class Ui extends BaseUi<Params> {
 
       const oldValue = args.buffer.getByte(address);
 
-      args.buffer.change(address, value);
-
-      const bufnr = this.#buffers[args.options.name];
-      await fn.setbufvar(args.denops, bufnr, "&modified", true);
-
       this.#histories.push({
         operation: "change",
         address,
         oldValue,
         newValue: value,
       });
+      this.#undoHistories = [];
+
+      args.buffer.change(address, value);
+
+      const bufnr = this.#buffers[args.options.name];
+      await fn.setbufvar(args.denops, bufnr, "&modified", true);
 
       return ActionFlags.Redraw;
     },
@@ -383,16 +385,18 @@ export class Ui extends BaseUi<Params> {
       }
 
       const insertValue = new Uint8Array([value]);
-      args.buffer.insert(address, insertValue);
-
-      const bufnr = this.#buffers[args.options.name];
-      await fn.setbufvar(args.denops, bufnr, "&modified", true);
 
       this.#histories.push({
         operation: "insert",
         address,
         newValue: insertValue,
       });
+      this.#undoHistories = [];
+
+      args.buffer.insert(address, insertValue);
+
+      const bufnr = this.#buffers[args.options.name];
+      await fn.setbufvar(args.denops, bufnr, "&modified", true);
 
       return ActionFlags.Redraw;
     },
@@ -418,6 +422,7 @@ export class Ui extends BaseUi<Params> {
         address,
         oldValue: args.buffer.getByte(address),
       });
+      this.#undoHistories = [];
 
       args.buffer.remove(address);
 
@@ -462,6 +467,34 @@ export class Ui extends BaseUi<Params> {
 
       return ActionFlags.None;
     },
+    redo: async (args: {
+      denops: Denops;
+      context: Context;
+      options: DdxOptions;
+      buffer: DdxBuffer;
+      uiParams: Params;
+    }) => {
+      const history = this.#undoHistories.pop();
+      if (!history) {
+        return ActionFlags.Persist;
+      }
+
+      undoOperation(
+        args.buffer,
+        this.#histories,
+        history,
+      );
+
+      const bufnr = this.#buffers[args.options.name];
+      await fn.setbufvar(
+        args.denops,
+        bufnr,
+        "&modified",
+        true,
+      );
+
+      return ActionFlags.Redraw;
+    },
     undo: async (args: {
       denops: Denops;
       context: Context;
@@ -474,20 +507,11 @@ export class Ui extends BaseUi<Params> {
         return ActionFlags.Persist;
       }
 
-      switch (history.operation) {
-        case "change":
-          args.buffer.change(history.address, history.oldValue);
-          break;
-        case "insert":
-          args.buffer.remove(history.address, history.newValue.length);
-          break;
-        case "remove":
-          args.buffer.insert(
-            history.address,
-            Uint8Array.from([history.oldValue]),
-          );
-          break;
-      }
+      undoOperation(
+        args.buffer,
+        this.#undoHistories,
+        history,
+      );
 
       const bufnr = this.#buffers[args.options.name];
       await fn.setbufvar(
@@ -661,4 +685,47 @@ async function searchAddress(
     row,
     col,
   );
+}
+
+function undoOperation(
+  buffer: DdxBuffer,
+  histories: OperationHistory[],
+  history: OperationHistory,
+) {
+  switch (history.operation) {
+    case "change":
+      histories.push({
+        operation: "change",
+        address: history.address,
+        oldValue: buffer.getByte(history.address),
+        newValue: history.oldValue,
+      });
+
+      buffer.change(history.address, history.oldValue);
+
+      break;
+    case "insert":
+      histories.push({
+        operation: "remove",
+        address: history.address,
+        oldValue: buffer.getByte(history.address),
+      });
+
+      buffer.remove(history.address, history.newValue.length);
+
+      break;
+    case "remove":
+      histories.push({
+        operation: "insert",
+        address: history.address,
+        newValue: Uint8Array.from([history.oldValue]),
+      });
+
+      buffer.insert(
+        history.address,
+        Uint8Array.from([history.oldValue]),
+      );
+
+      break;
+  }
 }
