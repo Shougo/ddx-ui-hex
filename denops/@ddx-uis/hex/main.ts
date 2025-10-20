@@ -325,7 +325,7 @@ export class Ui extends BaseUi<Params> {
       }
 
       const value = parseStrictInt(input, 16);
-      if (Number.isNaN(value)) {
+      if (Number.isNaN(value) || value > 255 || value < 0) {
         await printError(
           args.denops,
           "Invalid value",
@@ -376,7 +376,7 @@ export class Ui extends BaseUi<Params> {
       }
 
       const value = parseStrictInt(input, 16);
-      if (Number.isNaN(value)) {
+      if (Number.isNaN(value) || value > 255 || value < 0) {
         await printError(
           args.denops,
           "Invalid value",

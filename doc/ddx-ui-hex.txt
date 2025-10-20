@@ -80,7 +80,7 @@ save
 			{path}: Save filename path.
 
 		Save current buffer to {path}.
-		If {path} is empty, opened path will be used.
+		If {path} is empty, the opened file path will be used.
 
 ==============================================================================
 PARAMS                                                     *ddx-ui-hex-params*
