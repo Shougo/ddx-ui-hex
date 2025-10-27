@@ -316,9 +316,11 @@ export class Ui extends BaseUi<Params> {
         return ActionFlags.Persist;
       }
 
+      const oldValue = args.buffer.getByte(address);
+
       const input = await args.denops.call(
         "ddx#ui#hex#input",
-        "New value: ",
+        `New value: 0x${oldValue.toString(16)} -> 0x`,
       ) as string;
       if (input == "") {
         return ActionFlags.Persist;
@@ -332,8 +334,6 @@ export class Ui extends BaseUi<Params> {
         );
         return ActionFlags.Persist;
       }
-
-      const oldValue = args.buffer.getByte(address);
 
       this.#histories.push({
         operation: "change",
