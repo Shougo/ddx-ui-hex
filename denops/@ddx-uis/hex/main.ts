@@ -319,7 +319,7 @@ export class Ui extends BaseUi<Params> {
       const oldValue = args.buffer.getByte(address);
 
       const input = await args.denops.call(
-        "ddx#ui#hex#input",
+        "ddx#util#input",
         `New value: 0x${oldValue.toString(16)} -> 0x`,
       ) as string;
       if (input == "") {
@@ -368,7 +368,7 @@ export class Ui extends BaseUi<Params> {
       }
 
       const input = await args.denops.call(
-        "ddx#ui#hex#input",
+        "ddx#util#input",
         "New value: ",
       ) as string;
       if (input == "") {

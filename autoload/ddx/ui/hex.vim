@@ -42,14 +42,3 @@ endfunction
 function ddx#ui#hex#get_cur_text(string, col) abort
   return a:string->matchstr('^.*\%' .. a:col . 'c.')
 endfunction
-
-function ddx#ui#hex#input(prompt, text='') abort
-  redraw
-
-  try
-    return a:prompt->input(a:text)
-  catch /^Vim:Interrupt/
-  endtry
-
-  return ''
-endfunction
