@@ -38,27 +38,6 @@ export type SaveParams = {
   path?: string;
 };
 
-type OperationHistory = ChangeHistory | InsertHistory | RemoveHistory;
-
-type ChangeHistory = {
-  operation: "change";
-  address: number;
-  oldValue: number;
-  newValue: number;
-};
-
-type InsertHistory = {
-  operation: "insert";
-  address: number;
-  newValue: Uint8Array;
-};
-
-type RemoveHistory = {
-  operation: "remove";
-  address: number;
-  oldValue: number;
-};
-
 export type Params = {
   encoding: "utf-8";
   floatingBorder: FloatingBorder;
@@ -75,8 +54,6 @@ export class Ui extends BaseUi<Params> {
   #buffers: Record<string, number> = {};
   #namespace: number = 0;
   #offset: number = 0;
-  #histories: OperationHistory[] = [];
-  #undoHistories: OperationHistory[] = [];
 
   override async redraw(args: {
     denops: Denops;
@@ -335,14 +312,6 @@ export class Ui extends BaseUi<Params> {
         return ActionFlags.Persist;
       }
 
-      this.#histories.push({
-        operation: "change",
-        address,
-        oldValue,
-        newValue: value,
-      });
-      this.#undoHistories = [];
-
       args.buffer.change(address, value);
 
       const bufnr = this.#buffers[args.options.name];
@@ -386,13 +355,6 @@ export class Ui extends BaseUi<Params> {
 
       const insertValue = new Uint8Array([value]);
 
-      this.#histories.push({
-        operation: "insert",
-        address,
-        newValue: insertValue,
-      });
-      this.#undoHistories = [];
-
       args.buffer.insert(address, insertValue);
 
       const bufnr = this.#buffers[args.options.name];
@@ -416,13 +378,6 @@ export class Ui extends BaseUi<Params> {
         );
         return ActionFlags.Persist;
       }
-
-      this.#histories.push({
-        operation: "remove",
-        address,
-        oldValue: args.buffer.getByte(address),
-      });
-      this.#undoHistories = [];
 
       args.buffer.remove(address);
 
@@ -474,16 +429,7 @@ export class Ui extends BaseUi<Params> {
       buffer: DdxBuffer;
       uiParams: Params;
     }) => {
-      const history = this.#undoHistories.pop();
-      if (!history) {
-        return ActionFlags.Persist;
-      }
-
-      undoOperation(
-        args.buffer,
-        this.#histories,
-        history,
-      );
+      args.buffer.redo();
 
       const bufnr = this.#buffers[args.options.name];
       await fn.setbufvar(
@@ -502,23 +448,14 @@ export class Ui extends BaseUi<Params> {
       buffer: DdxBuffer;
       uiParams: Params;
     }) => {
-      const history = this.#histories.pop();
-      if (!history) {
-        return ActionFlags.Persist;
-      }
-
-      undoOperation(
-        args.buffer,
-        this.#undoHistories,
-        history,
-      );
+      const historyLength = args.buffer.undo();
 
       const bufnr = this.#buffers[args.options.name];
       await fn.setbufvar(
         args.denops,
         bufnr,
         "&modified",
-        this.#histories.length > 0,
+        historyLength > 0,
       );
 
       return ActionFlags.Redraw;
@@ -685,47 +622,4 @@ async function searchAddress(
     row,
     col,
   );
-}
-
-function undoOperation(
-  buffer: DdxBuffer,
-  histories: OperationHistory[],
-  history: OperationHistory,
-) {
-  switch (history.operation) {
-    case "change":
-      histories.push({
-        operation: "change",
-        address: history.address,
-        oldValue: buffer.getByte(history.address),
-        newValue: history.oldValue,
-      });
-
-      buffer.change(history.address, history.oldValue);
-
-      break;
-    case "insert":
-      histories.push({
-        operation: "remove",
-        address: history.address,
-        oldValue: buffer.getByte(history.address),
-      });
-
-      buffer.remove(history.address, history.newValue.length);
-
-      break;
-    case "remove":
-      histories.push({
-        operation: "insert",
-        address: history.address,
-        newValue: Uint8Array.from([history.oldValue]),
-      });
-
-      buffer.insert(
-        history.address,
-        Uint8Array.from([history.oldValue]),
-      );
-
-      break;
-  }
 }
