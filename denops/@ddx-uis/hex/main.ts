@@ -131,15 +131,6 @@ export class Ui extends BaseUi<Params> {
       await this.#initOptions(args.denops, args.options, args.uiParams, bufnr);
     }
 
-    // Init autocmds
-    const augroupName = `ddx-ui-hex-${bufnr}`;
-    await args.denops.cmd(`augroup ${augroupName}`);
-    await args.denops.cmd(`autocmd! ${augroupName}`);
-    await args.denops.cmd(
-      `autocmd ${augroupName} CursorMoved <buffer>` +
-        " call ddx#ui#hex#_highlight_cursor()",
-    );
-
     this.#buffers[args.options.name] = bufnr;
 
     let lnum = 1;
@@ -499,6 +490,15 @@ export class Ui extends BaseUi<Params> {
         "ddx-ui-hex",
       ) as number;
     }
+
+    // Init autocmds
+    const augroupName = `ddx-ui-hex-${bufnr}`;
+    await denops.cmd(`augroup ${augroupName}`);
+    await denops.cmd(`autocmd! ${augroupName}`);
+    await denops.cmd(
+      `autocmd ${augroupName} CursorMoved <buffer=${bufnr}>` +
+        " call ddx#ui#hex#_highlight_cursor()",
+    );
 
     return bufnr;
   }
