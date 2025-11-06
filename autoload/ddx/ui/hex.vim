@@ -10,6 +10,9 @@ function ddx#ui#hex#parse_address(string, cur_text, encoding) abort
   " Get last address.
   const base_address = a:string->matchstr('^\x\+')
 
+  " TODO
+  const ascii_width = 16
+
   " Default.
   let type = 'address'
   let address = base_address->str2nr(16)
@@ -30,7 +33,7 @@ function ddx#ui#hex#parse_address(string, cur_text, encoding) abort
       let offset = 0
     endif
 
-    if offset < b:vinarise.width
+    if offset > ascii_width
       let type = 'ascii'
       let address += offset
     endif
@@ -41,4 +44,23 @@ endfunction
 
 function ddx#ui#hex#get_cur_text(string, col) abort
   return a:string->matchstr('^.*\%' .. a:col . 'c.')
+endfunction
+
+function ddx#ui#hex#_highlight_cursor() abort
+  const current_line = '.'->getline()
+  const cur_text = ddx#ui#hex#get_cur_text(current_line, '.'->col())
+  const [type, address] = ddx#ui#hex#parse_address(
+        \ current_line, cur_text, b:ddx_ui_hex_encoding)
+  "echomsg [type, address]
+
+  const highlight_id = 100
+
+  silent! call matchdelete(highlight_id)
+
+  if type ==# 'hex'
+    " Highlight ascii area
+    const pattern = printf('\%%.l\%%%dv', 63 + address % 16)
+    const highlight = b:ddx_ui_hex_highlights->get('cursorAscii', 'Search')
+    call matchadd(highlight, pattern, 100, highlight_id)
+  endif
 endfunction

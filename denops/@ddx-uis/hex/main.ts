@@ -26,6 +26,7 @@ export type FloatingBorder =
 export type HighlightGroup = {
   ascii?: string;
   control?: string;
+  cursorAscii?: string;
   escape?: string;
   ff?: string;
   floating?: string;
@@ -129,6 +130,15 @@ export class Ui extends BaseUi<Params> {
     if (!this.#buffers[args.options.name] || winid < 0) {
       await this.#initOptions(args.denops, args.options, args.uiParams, bufnr);
     }
+
+    // Init autocmds
+    const augroupName = `ddx-ui-hex-${bufnr}`;
+    await args.denops.cmd(`augroup ${augroupName}`);
+    await args.denops.cmd(`autocmd! ${augroupName}`);
+    await args.denops.cmd(
+      `autocmd ${augroupName} CursorMoved <buffer>` +
+        " call ddx#ui#hex#_highlight_cursor()",
+    );
 
     this.#buffers[args.options.name] = bufnr;
 
@@ -504,6 +514,18 @@ export class Ui extends BaseUi<Params> {
 
     await batch(denops, async (denops: Denops) => {
       await fn.setbufvar(denops, bufnr, "ddx_ui_name", options.name);
+      await fn.setbufvar(
+        denops,
+        bufnr,
+        "ddx_ui_hex_encoding",
+        uiParams.encoding,
+      );
+      await fn.setbufvar(
+        denops,
+        bufnr,
+        "ddx_ui_hex_highlights",
+        uiParams.highlights,
+      );
 
       // Set options
       await fn.setwinvar(denops, winid, "&list", 0);

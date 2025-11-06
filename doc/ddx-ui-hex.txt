@@ -114,6 +114,10 @@ highlights	(dictionary)
 		Specify control code highlight.
 		Default: "Special"
 
+		cursorAscii		(string)
+		Specify cursor ascii area highlight.
+		Default: "Search"
+
 		escape			(string)
 		Specify escape code highlight.
 		Default: "Statement"
