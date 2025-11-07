@@ -32,6 +32,7 @@ export type HighlightGroup = {
   floating?: string;
   newLine?: string;
   null?: string;
+  selected?: string;
   tab?: string;
 };
 
@@ -55,6 +56,7 @@ export class Ui extends BaseUi<Params> {
   #buffers: Record<string, number> = {};
   #namespace: number = 0;
   #offset: number = 0;
+  #selectedStartAddress: number = -1;
 
   override async redraw(args: {
     denops: Denops;
@@ -167,7 +169,10 @@ export class Ui extends BaseUi<Params> {
       let row = 1;
       for (const byte of bytes) {
         let highlight = "";
-        if (byte == 0x00) {
+        const rowAddress = start + row - 1;
+        if (this.#selectedStartAddress == rowAddress) {
+          highlight = args.uiParams.highlights.selected ?? "Visual";
+        } else if (byte == 0x00) {
           highlight = args.uiParams.highlights.null ?? "Ignore";
         } else if (byte == 0x09) {
           highlight = args.uiParams.highlights.tab ?? "Special";
@@ -407,6 +412,31 @@ export class Ui extends BaseUi<Params> {
       await fn.setbufvar(args.denops, bufnr, "&modified", false);
 
       return ActionFlags.Persist;
+    },
+    selectAddress: async (args: {
+      denops: Denops;
+      context: Context;
+      options: DdxOptions;
+      buffer: DdxBuffer;
+      uiParams: Params;
+    }) => {
+      // Get address
+      const address = await this.#getAddress(args.denops, args.uiParams);
+      if (Number.isNaN(address)) {
+        await printError(
+          args.denops,
+          "Invalid address",
+        );
+        return ActionFlags.Persist;
+      }
+
+      if (this.#selectedStartAddress >= 0 && address == this.#selectedStartAddress) {
+        this.#selectedStartAddress = -1;
+      } else {
+        this.#selectedStartAddress = address;
+      }
+
+      return ActionFlags.Redraw;
     },
     quit: async (args: {
       denops: Denops;

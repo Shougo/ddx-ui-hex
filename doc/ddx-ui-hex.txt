@@ -70,6 +70,11 @@ redo
 remove
 		Remove current value.
 
+                                             *ddx-ui-hex-action-selectAddress*
+selectAddress
+		Select current address.
+		If it is already selected, it is unselected.
+
                                                       *ddx-ui-hex-action-undo*
 undo
 		Undo the last change.
@@ -129,6 +134,10 @@ highlights	(dictionary)
 		null			(string)
 		Specify null byte code highlight.
 		Default: "Ignore"
+
+		selected		(string)
+		Specify selected address highlight.
+		Default: "Visual"
 
 		tab			(string)
 		Specify tab code highlight.
