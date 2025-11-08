@@ -25,6 +25,7 @@ export type FloatingBorder =
 
 export type HighlightGroup = {
   ascii?: string;
+  changed?: string;
   control?: string;
   cursorAscii?: string;
   escape?: string;
@@ -142,6 +143,8 @@ export class Ui extends BaseUi<Params> {
 
     const modified = await fn.getbufvar(args.denops, bufnr, "&modified");
 
+    const changedAdresses = args.buffer.getChangedAddresses();
+
     while (start < size) {
       const bytes = args.buffer.getBytes(
         start,
@@ -172,6 +175,8 @@ export class Ui extends BaseUi<Params> {
         const rowAddress = start + row - 1;
         if (this.#selectedStartAddress == rowAddress) {
           highlight = args.uiParams.highlights.selected ?? "Visual";
+        } else if (changedAdresses.has(rowAddress)) {
+          highlight = args.uiParams.highlights.changed ?? "ErrorMsg";
         } else if (byte == 0x00) {
           highlight = args.uiParams.highlights.null ?? "Ignore";
         } else if (byte == 0x09) {

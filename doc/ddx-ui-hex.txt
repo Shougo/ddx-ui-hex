@@ -115,6 +115,10 @@ highlights	(dictionary)
 		Specify ASCII code highlight.
 		Default: ""
 
+		changed			(string)
+		Specify changed address highlight.
+		Default: "ErrorMsg"
+
 		control			(string)
 		Specify control code highlight.
 		Default: "Special"
