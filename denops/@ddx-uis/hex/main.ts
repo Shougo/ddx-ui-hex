@@ -304,29 +304,62 @@ export class Ui extends BaseUi<Params> {
         return ActionFlags.Persist;
       }
 
-      const oldValue = args.buffer.getByte(address);
-
       const input = await args.denops.call(
         "ddx#util#input",
-        `New value: 0x${oldValue.toString(16)} -> 0x`,
+        `New value: 0x`,
       ) as string;
       if (input == "") {
         return ActionFlags.Persist;
       }
 
-      const value = parseStrictInt(input, 16);
-      if (Number.isNaN(value) || value > 255 || value < 0) {
-        await printError(
-          args.denops,
-          "Invalid value",
-        );
-        return ActionFlags.Persist;
-      }
+      const isRange = this.#selectedStartAddress >= 0 &&
+        address !== this.#selectedStartAddress;
+      if (isRange) {
+        // Parse hex string (e.g. "383838" -> [0x38, 0x38, 0x38])
+        const hexToBytes = (s: string): Uint8Array | null => {
+          const clean = s.replace(/\s+/g, "");
+          if (clean.length === 0 || clean.length % 2 !== 0) return null;
+          const out = new Uint8Array(clean.length / 2);
+          for (let i = 0; i < out.length; i++) {
+            const byteStr = clean.slice(i * 2, i * 2 + 2);
+            const b = parseInt(byteStr, 16);
+            if (Number.isNaN(b) || b < 0 || b > 255) return null;
+            out[i] = b;
+          }
+          return out;
+        };
 
-      args.buffer.change(address, value);
+        const rangeLength = Math.abs(this.#selectedStartAddress - address) + 1;
+        const rangeStart = Math.min(address, this.#selectedStartAddress);
+
+        const bytes = hexToBytes(input);
+        if (bytes === null || bytes.length !== rangeLength) {
+          await printError(
+            args.denops,
+            `Invalid value or length mismatch (expected ${rangeLength} bytes in hex).`,
+          );
+          return ActionFlags.Persist;
+        }
+
+        // Apply the bytes starting at `start`
+        args.buffer.changeBytes(rangeStart, bytes);
+      } else {
+        const value = parseStrictInt(input, 16);
+        if (Number.isNaN(value) || value > 255 || value < 0) {
+          await printError(
+            args.denops,
+            "Invalid value",
+          );
+          return ActionFlags.Persist;
+        }
+
+        args.buffer.change(address, value);
+      }
 
       const bufnr = this.#buffers[args.options.name];
       await fn.setbufvar(args.denops, bufnr, "&modified", true);
+
+      this.#selectedStartAddress = -1;
 
       return ActionFlags.Redraw;
     },
@@ -404,6 +437,8 @@ export class Ui extends BaseUi<Params> {
 
       const bufnr = this.#buffers[args.options.name];
       await fn.setbufvar(args.denops, bufnr, "&modified", true);
+
+      this.#selectedStartAddress = -1;
 
       return ActionFlags.Redraw;
     },

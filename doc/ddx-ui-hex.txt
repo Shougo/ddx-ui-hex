@@ -52,6 +52,7 @@ ACTIONS                                                   *ddx-ui-hex-actions*
                                                     *ddx-ui-hex-action-change*
 change
 		Change the value in current address.
+		If the address is selected, ranged values are changed.
 
                                                     *ddx-ui-hex-action-insert*
 insert
