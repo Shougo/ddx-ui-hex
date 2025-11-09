@@ -390,7 +390,17 @@ export class Ui extends BaseUi<Params> {
         return ActionFlags.Persist;
       }
 
-      args.buffer.remove(address);
+      if (
+        this.#selectedStartAddress > 0 && address !== this.#selectedStartAddress
+      ) {
+        const start = Math.min(address, this.#selectedStartAddress);
+        const length = Math.abs(this.#selectedStartAddress - address);
+        if (length > 0) {
+          args.buffer.remove(start, length);
+        }
+      } else {
+        args.buffer.remove(address);
+      }
 
       const bufnr = this.#buffers[args.options.name];
       await fn.setbufvar(args.denops, bufnr, "&modified", true);
@@ -435,7 +445,9 @@ export class Ui extends BaseUi<Params> {
         return ActionFlags.Persist;
       }
 
-      if (this.#selectedStartAddress >= 0 && address == this.#selectedStartAddress) {
+      if (
+        this.#selectedStartAddress >= 0 && address == this.#selectedStartAddress
+      ) {
         this.#selectedStartAddress = -1;
       } else {
         this.#selectedStartAddress = address;

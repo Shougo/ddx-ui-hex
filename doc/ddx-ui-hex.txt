@@ -68,7 +68,8 @@ redo
 
                                                     *ddx-ui-hex-action-remove*
 remove
-		Remove current value.
+		Remove current address value.
+		If the address is selected, ranged adress is removed.
 
                                              *ddx-ui-hex-action-selectAddress*
 selectAddress
