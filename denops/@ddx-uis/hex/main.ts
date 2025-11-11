@@ -37,6 +37,10 @@ export type HighlightGroup = {
   tab?: string;
 };
 
+export type ChangeParams = {
+  type?: "hex" | "string";
+};
+
 export type SaveParams = {
   path?: string;
 };
@@ -293,7 +297,10 @@ export class Ui extends BaseUi<Params> {
       options: DdxOptions;
       buffer: DdxBuffer;
       uiParams: Params;
+      actionParams: BaseParams;
     }) => {
+      const params = args.actionParams as ChangeParams;
+
       // Get address
       const address = await this.#getAddress(args.denops, args.uiParams);
       if (Number.isNaN(address)) {
@@ -304,12 +311,25 @@ export class Ui extends BaseUi<Params> {
         return ActionFlags.Persist;
       }
 
-      const input = await args.denops.call(
+      const type = params.type ?? "hex";
+
+      const raw = await args.denops.call(
         "ddx#util#input",
-        `New value: 0x`,
+        type === "hex" ? "New value: 0x" : "New string: ",
       ) as string;
-      if (input == "") {
+      if (raw === "") {
         return ActionFlags.Persist;
+      }
+
+      let input = raw;
+
+      if (type === "string") {
+        // Convert to hex string
+        const encoder = new TextEncoder();
+        const bytes = encoder.encode(raw);
+        input = Array.from(bytes)
+          .map((b) => b.toString(16).padStart(2, "0"))
+          .join("");
       }
 
       const isRange = this.#selectedStartAddress >= 0 &&

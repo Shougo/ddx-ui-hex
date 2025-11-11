@@ -54,6 +54,12 @@ change
 		Change the value in current address.
 		If the address is selected, ranged values are changed.
 
+		params:
+			{type}: Change value type.
+
+				"hex": hexa decimal
+				"string": string
+
                                                     *ddx-ui-hex-action-insert*
 insert
 		Insert the value in current address.
