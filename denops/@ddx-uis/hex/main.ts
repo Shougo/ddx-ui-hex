@@ -182,17 +182,17 @@ export class Ui extends BaseUi<Params> {
         } else if (changedAdresses.has(rowAddress)) {
           highlight = args.uiParams.highlights.changed ?? "ErrorMsg";
         } else if (byte == 0x00) {
-          highlight = args.uiParams.highlights.null ?? "Ignore";
+          highlight = args.uiParams.highlights.null ?? "";
         } else if (byte == 0x09) {
-          highlight = args.uiParams.highlights.tab ?? "Special";
+          highlight = args.uiParams.highlights.tab ?? "";
         } else if (byte == 0x0a) {
-          highlight = args.uiParams.highlights.newLine ?? "Comment";
+          highlight = args.uiParams.highlights.newLine ?? "";
         } else if (0x01 <= byte && byte <= 0x1f) {
-          highlight = args.uiParams.highlights.null ?? "Special";
+          highlight = args.uiParams.highlights.null ?? "";
         } else if (0x20 <= byte && byte <= 0x7f) {
           highlight = args.uiParams.highlights.ascii ?? "";
         } else if (0x80 <= byte && byte <= 0xfe) {
-          highlight = args.uiParams.highlights.escape ?? "Statement";
+          highlight = args.uiParams.highlights.escape ?? "";
         }
 
         if (highlight.length > 0) {

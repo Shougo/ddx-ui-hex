@@ -129,7 +129,7 @@ highlights	(dictionary)
 
 		control			(string)
 		Specify control code highlight.
-		Default: "Special"
+		Default: ""
 
 		cursorAscii		(string)
 		Specify cursor ascii area highlight.
@@ -137,15 +137,15 @@ highlights	(dictionary)
 
 		escape			(string)
 		Specify escape code highlight.
-		Default: "Statement"
+		Default: ""
 
 		newLine			(string)
 		Specify new line code highlight.
-		Default: "Comment"
+		Default: ""
 
 		null			(string)
 		Specify null byte code highlight.
-		Default: "Ignore"
+		Default: ""
 
 		selected		(string)
 		Specify selected address highlight.
@@ -153,7 +153,7 @@ highlights	(dictionary)
 
 		tab			(string)
 		Specify tab code highlight.
-		Default: "Special"
+		Default: ""
 
 		floating			(string)
 		Specify floating window background highlight.
