@@ -45,6 +45,10 @@ export type SaveParams = {
   path?: string;
 };
 
+export type SearchParams = {
+  type?: "hex" | "string";
+};
+
 export type Params = {
   encoding: "utf-8";
   floatingBorder: FloatingBorder;
@@ -71,7 +75,7 @@ export class Ui extends BaseUi<Params> {
     uiOptions: UiOptions;
     uiParams: Params;
   }): Promise<void> {
-    this.#offset = args.buffer.offset;
+    this.#offset = args.buffer.getOffset();
 
     function arrayBufferToHex(buffer: Uint8Array) {
       return Array.prototype.map.call(
@@ -321,13 +325,12 @@ export class Ui extends BaseUi<Params> {
         return ActionFlags.Persist;
       }
 
-      let input = raw;
+      let bytesString = raw;
 
       if (type === "string") {
         // Convert to hex string
         const encoder = new TextEncoder();
-        const bytes = encoder.encode(raw);
-        input = Array.from(bytes)
+        bytesString = Array.from(encoder.encode(raw))
           .map((b) => b.toString(16).padStart(2, "0"))
           .join("");
       }
@@ -335,24 +338,10 @@ export class Ui extends BaseUi<Params> {
       const isRange = this.#selectedStartAddress >= 0 &&
         address !== this.#selectedStartAddress;
       if (isRange) {
-        // Parse hex string (e.g. "383838" -> [0x38, 0x38, 0x38])
-        const hexToBytes = (s: string): Uint8Array | null => {
-          const clean = s.replace(/\s+/g, "");
-          if (clean.length === 0 || clean.length % 2 !== 0) return null;
-          const out = new Uint8Array(clean.length / 2);
-          for (let i = 0; i < out.length; i++) {
-            const byteStr = clean.slice(i * 2, i * 2 + 2);
-            const b = parseInt(byteStr, 16);
-            if (Number.isNaN(b) || b < 0 || b > 255) return null;
-            out[i] = b;
-          }
-          return out;
-        };
-
         const rangeLength = Math.abs(this.#selectedStartAddress - address) + 1;
         const rangeStart = Math.min(address, this.#selectedStartAddress);
 
-        const bytes = hexToBytes(input);
+        const bytes = hexToBytes(bytesString);
         if (bytes === null || bytes.length !== rangeLength) {
           await printError(
             args.denops,
@@ -364,7 +353,7 @@ export class Ui extends BaseUi<Params> {
         // Apply the bytes starting at `start`
         args.buffer.changeBytes(rangeStart, bytes);
       } else {
-        const value = parseStrictInt(input, 16);
+        const value = parseStrictInt(bytesString, 16);
         if (Number.isNaN(value) || value > 255 || value < 0) {
           await printError(
             args.denops,
@@ -480,6 +469,59 @@ export class Ui extends BaseUi<Params> {
 
       const bufnr = this.#buffers[args.options.name];
       await fn.setbufvar(args.denops, bufnr, "&modified", false);
+
+      return ActionFlags.Persist;
+    },
+    search: async (args: {
+      denops: Denops;
+      context: Context;
+      options: DdxOptions;
+      buffer: DdxBuffer;
+      uiParams: Params;
+      actionParams: BaseParams;
+    }) => {
+      const params = args.actionParams as SearchParams;
+
+      // Get address
+      const address = await this.#getAddress(args.denops, args.uiParams);
+      if (Number.isNaN(address)) {
+        await printError(
+          args.denops,
+          "Invalid address",
+        );
+        return ActionFlags.Persist;
+      }
+
+      const type = params.type ?? "hex";
+
+      const raw = await args.denops.call(
+        "ddx#util#input",
+        type === "hex" ? "Search value: 0x" : "Search string: ",
+      ) as string;
+      if (raw === "") {
+        return ActionFlags.Persist;
+      }
+
+      let bytesString = raw;
+
+      if (type === "string") {
+        // Convert to hex string
+        const encoder = new TextEncoder();
+        bytesString = Array.from(encoder.encode(raw))
+          .map((b) => b.toString(16).padStart(2, "0"))
+          .join("");
+      }
+
+      const pos = args.buffer.search(address, hexToBytes(bytesString));
+
+      if (pos >= 0) {
+        await searchAddress(args.denops, this.#offset, pos);
+      } else {
+        await printError(
+          args.denops,
+          "Not found",
+        );
+      }
 
       return ActionFlags.Persist;
     },
@@ -728,13 +770,13 @@ async function searchAddress(
   offset: number,
   address: number,
 ) {
-  await fn.cursor(denops, 1, 1);
-
   // Parse address number.
   const row = Math.floor((address - offset) / 0x10) + 1;
   if (row < 0) {
     return;
   }
+
+  await fn.cursor(denops, 1, 1);
 
   const baseAddress = ("00000000" + address.toString()).slice(-8);
   const addressOffset = address & 0x0f;
@@ -746,4 +788,19 @@ async function searchAddress(
     row,
     col,
   );
+}
+
+
+// Parse hex string (e.g. "383838" -> [0x38, 0x38, 0x38])
+function hexToBytes(s: string): Uint8Array | null {
+  const clean = s.replace(/\s+/g, "");
+  if (clean.length === 0 || clean.length % 2 !== 0) return null;
+  const out = new Uint8Array(clean.length / 2);
+  for (let i = 0; i < out.length; i++) {
+    const byteStr = clean.slice(i * 2, i * 2 + 2);
+    const b = parseInt(byteStr, 16);
+    if (Number.isNaN(b) || b < 0 || b > 255) return null;
+    out[i] = b;
+  }
+  return out;
 }
