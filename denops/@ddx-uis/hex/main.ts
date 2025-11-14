@@ -77,13 +77,6 @@ export class Ui extends BaseUi<Params> {
   }): Promise<void> {
     this.#offset = args.buffer.getOffset();
 
-    function arrayBufferToHex(buffer: Uint8Array) {
-      return Array.prototype.map.call(
-        new Uint8Array(buffer),
-        (x) => ("00" + x.toString(16)).slice(-2),
-      ).join(" ");
-    }
-
     const bufferName = `ddx-ff-${args.options.name}`;
     const initialized = this.#buffers[args.options.name] ||
       (await fn.bufexists(args.denops, bufferName) &&
@@ -144,86 +137,23 @@ export class Ui extends BaseUi<Params> {
 
     this.#buffers[args.options.name] = bufnr;
 
-    let lnum = 1;
-    let start = 0;
+    const modified = await fn.getbufvar(args.denops, bufnr, "&modified");
     const size = args.buffer.getSize();
     const length = 16;
-
-    const modified = await fn.getbufvar(args.denops, bufnr, "&modified");
-
     const changedAdresses = args.buffer.getChangedAddresses();
 
-    while (start < size) {
-      const bytes = args.buffer.getBytes(
-        start,
-        Math.min(length, size - start),
-      );
-
-      const address = start.toString(16);
-      const padding = " ".repeat((16 - bytes.length) * 3);
-
-      const ascii = (new TextDecoder().decode(bytes)).replaceAll(
-        // deno-lint-ignore no-control-regex
-        /[\x00-\x1f]/g,
-        ".",
-      );
-
-      const addressString = ("00000000" + address).slice(-8);
-
-      await fn.setbufline(
-        args.denops,
-        bufnr,
-        lnum,
-        `${addressString}: ${arrayBufferToHex(bytes)}${padding} |   ${ascii}`,
-      );
-
-      let row = 1;
-      for (const byte of bytes) {
-        let highlight = "";
-        const rowAddress = start + row - 1;
-        if (this.#selectedStartAddress == rowAddress) {
-          highlight = args.uiParams.highlights.selected ?? "Visual";
-        } else if (changedAdresses.has(rowAddress)) {
-          highlight = args.uiParams.highlights.changed ?? "ErrorMsg";
-        } else if (byte == 0x00) {
-          highlight = args.uiParams.highlights.null ?? "";
-        } else if (byte == 0x09) {
-          highlight = args.uiParams.highlights.tab ?? "";
-        } else if (byte == 0x0a) {
-          highlight = args.uiParams.highlights.newLine ?? "";
-        } else if (0x01 <= byte && byte <= 0x1f) {
-          highlight = args.uiParams.highlights.null ?? "";
-        } else if (0x20 <= byte && byte <= 0x7f) {
-          highlight = args.uiParams.highlights.ascii ?? "";
-        } else if (0x80 <= byte && byte <= 0xfe) {
-          highlight = args.uiParams.highlights.escape ?? "";
-        }
-
-        if (highlight.length > 0) {
-          try {
-            await args.denops.call(
-              "ddx#util#highlight",
-              highlight,
-              "ddx-byte-highlights",
-              1,
-              this.#namespace,
-              bufnr,
-              lnum,
-              addressString.length + 3 * row,
-              2,
-            );
-          } catch (_e: unknown) {
-            // may be failed
-            break;
-          }
-        }
-
-        row += 1;
-      }
-
-      start += length;
-      lnum += 1;
-    }
+    await renderBufferFast(
+      args,
+      hasNvim,
+      bufnr,
+      0,
+      length,
+      size,
+      1,
+      this.#namespace,
+      this.#selectedStartAddress,
+      changedAdresses,
+    );
 
     await fn.setbufvar(args.denops, bufnr, "&modified", modified);
   }
@@ -790,7 +720,6 @@ async function searchAddress(
   );
 }
 
-
 // Parse hex string (e.g. "383838" -> [0x38, 0x38, 0x38])
 function hexToBytes(s: string): Uint8Array | null {
   const clean = s.replace(/\s+/g, "");
@@ -803,4 +732,160 @@ function hexToBytes(s: string): Uint8Array | null {
     out[i] = b;
   }
   return out;
+}
+
+export async function renderBufferFast(
+  args: {
+    denops: Denops;
+    buffer: { getBytes(start: number, len: number): Uint8Array };
+    uiParams: { highlights: Record<string, string> };
+  },
+  hasNvim: boolean,
+  bufnr: number,
+  startOffset: number,
+  length: number,
+  size: number,
+  lnumStart: number,
+  namespace: number,
+  selectedStartAddress: number,
+  changedAdresses: Set<number>,
+) {
+  const lines: string[] = [];
+  const hlOps: Array<[number, number, number, string]> = []; // [lnum, colStart (0-based), len, hlGroup]
+  let start = startOffset;
+  let lnum = lnumStart; // 1-based line number in vim
+
+  // NOTE: small fast helpers
+  const hexTable = new Array(256);
+  for (let i = 0; i < 256; i++) {
+    hexTable[i] = i.toString(16).padStart(2, "0");
+  }
+  const arrayBufferToHexFast = (buf: Uint8Array) => {
+    let s = "";
+    for (let i = 0; i < buf.length; i++) {
+      s += hexTable[buf[i]];
+      if (i !== buf.length - 1) s += " ";
+    }
+    return s;
+  };
+  const bytesToAscii = (buf: Uint8Array) => {
+    // printable ASCII 0x20 - 0x7E or '.' otherwise
+    // build as string directly
+    const parts: string[] = new Array(buf.length);
+    for (let i = 0; i < buf.length; i++) {
+      const b = buf[i];
+      parts[i] = b >= 0x20 && b <= 0x7E ? String.fromCharCode(b) : ".";
+    }
+    return parts.join("");
+  };
+
+  while (start < size) {
+    const bytes = args.buffer.getBytes(
+      start,
+      Math.min(length, size - start),
+    );
+
+    const addressString = ("00000000" + start.toString(16)).slice(-8);
+    const hex = arrayBufferToHexFast(bytes);
+    const padding = " ".repeat((16 - bytes.length) * 3);
+    const ascii = bytesToAscii(bytes);
+
+    lines.push(`${addressString}: ${hex}${padding} |   ${ascii}`);
+
+    // collect highlight ops for this line (no RPC here)
+    // column where bytes hex begin: addressString.length + 2 (": ") = 8 + 2 = 10
+    const hexStartCol = addressString.length + 2; // 10 (0-based col used later)
+    // But in original code they used addressString.length + 3 * row; adapt to 0-based col start for each byte hex (two hex digits + space)
+    for (let i = 0; i < bytes.length; i++) {
+      const byte = bytes[i];
+      let highlight = "";
+      const rowAddress = start + i;
+      if (selectedStartAddress == rowAddress) {
+        highlight = args.uiParams.highlights.selected ?? "Visual";
+      } else if (changedAdresses.has(rowAddress)) {
+        highlight = args.uiParams.highlights.changed ?? "ErrorMsg";
+      } else if (byte === 0x00) {
+        highlight = args.uiParams.highlights.null ?? "";
+      } else if (byte === 0x09) {
+        highlight = args.uiParams.highlights.tab ?? "";
+      } else if (byte === 0x0a) {
+        highlight = args.uiParams.highlights.newLine ?? "";
+      } else if (0x01 <= byte && byte <= 0x1f) {
+        highlight = args.uiParams.highlights.null ?? "";
+      } else if (0x20 <= byte && byte <= 0x7f) {
+        highlight = args.uiParams.highlights.ascii ?? "";
+      } else if (0x80 <= byte && byte <= 0xfe) {
+        highlight = args.uiParams.highlights.escape ?? "";
+      }
+
+      if (highlight && highlight.length > 0) {
+        // calculate column: hexStartCol + i*3 (two hex digits + space)
+        const colStart = hexStartCol + i * 3;
+        hlOps.push([lnum, colStart, 2, highlight]); // highlight two columns (hex digits)
+      }
+    }
+
+    start += length;
+    lnum += 1;
+  }
+
+  const startIdx0 = lnumStart - 1;
+  const endIdx0 = startIdx0 + lines.length;
+  await setBufLines(
+    args.denops,
+    hasNvim,
+    bufnr,
+    startIdx0,
+    endIdx0,
+    lnumStart,
+    lines,
+  );
+
+  await args.denops.call(
+    "ddx#util#apply_highlights",
+    bufnr,
+    "ddx-byte-highlights",
+    hlOps,
+    namespace,
+  );
+}
+
+export async function setBufLines(
+  denops: Denops,
+  hasNvim: boolean,
+  bufnr: number,
+  startIdx0: number, // 0-based start (same as nvim_buf_set_lines)
+  endIdx0: number, // 0-based end (exclusive) (same as nvim_buf_set_lines)
+  lnumStart: number, // 1-based start line for Vim's setbufline
+  lines: string[],
+) {
+  if (hasNvim) {
+    // Neovim: use nvim_buf_set_lines (startIdx0/endIdx0 are 0-based)
+    await denops.call(
+      "nvim_buf_set_lines",
+      bufnr,
+      startIdx0,
+      endIdx0,
+      false,
+      lines,
+    );
+    return;
+  }
+
+  // Vim: use setbufline which expects 1-based lnum.
+  // setbufline(bufnr, lnum, lines) will replace lines starting at lnum with
+  // the provided list. If the provided list is shorter than the original
+  // range, remove the remainder.
+  await fn.setbufline(denops, bufnr, lnumStart, lines);
+
+  // Remove leftover lines if the original replaced-range was longer than
+  // lines.length
+  const originalCount = endIdx0 - startIdx0;
+  if (lines.length < originalCount) {
+    const deleteStart = lnumStart + lines.length;
+    const deleteEnd = lnumStart + originalCount - 1;
+    // deletebufline(bufnr, start, end) deletes inclusive range of lines
+    // (1-based)
+    await fn.deletebufline(denops, bufnr, deleteStart, deleteEnd);
+  }
 }
