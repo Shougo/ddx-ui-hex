@@ -768,19 +768,13 @@ export async function renderBufferFast(
     }
     return s;
   };
-  const bytesToAscii = (buf: Uint8Array) => {
-    // printable ASCII 0x20 - 0x7E or '.' otherwise
-    // build as string directly
-    const parts: string[] = new Array(buf.length);
-    for (let i = 0; i < buf.length; i++) {
-      const b = buf[i];
-      parts[i] = b >= 0x20 && b <= 0x7E ? String.fromCharCode(b) : ".";
-    }
-    return parts.join("");
-  };
 
   while (start < size) {
     const bytes = args.buffer.getBytes(
+      start,
+      Math.min(length, size - start),
+    );
+    const ascii = args.buffer.getChars(
       start,
       Math.min(length, size - start),
     );
@@ -788,14 +782,15 @@ export async function renderBufferFast(
     const addressString = ("00000000" + start.toString(16)).slice(-8);
     const hex = arrayBufferToHexFast(bytes);
     const padding = " ".repeat((16 - bytes.length) * 3);
-    const ascii = bytesToAscii(bytes);
 
     lines.push(`${addressString}: ${hex}${padding} |   ${ascii}`);
 
     // collect highlight ops for this line (no RPC here)
-    // column where bytes hex begin: addressString.length + 2 (": ") = 8 + 2 = 10
-    const hexStartCol = addressString.length + 2; // 10 (0-based col used later)
-    // But in original code they used addressString.length + 3 * row; adapt to 0-based col start for each byte hex (two hex digits + space)
+    // column where bytes hex begin:
+    // addressString.length + 2 (": ") = 8 + 2 = 10 (0-based col used later)
+    const hexStartCol = addressString.length + 2;
+    // But in original code they used addressString.length + 3 * row; adapt to
+    // 0-based col start for each byte hex (two hex digits + space)
     for (let i = 0; i < bytes.length; i++) {
       const byte = bytes[i];
       let highlight = "";
@@ -821,7 +816,8 @@ export async function renderBufferFast(
       if (highlight && highlight.length > 0) {
         // calculate column: hexStartCol + i*3 (two hex digits + space)
         const colStart = hexStartCol + i * 3;
-        hlOps.push([lnum, colStart, 2, highlight]); // highlight two columns (hex digits)
+        // highlight two columns (hex digits)
+        hlOps.push([lnum, colStart, 2, highlight]);
       }
     }
 
