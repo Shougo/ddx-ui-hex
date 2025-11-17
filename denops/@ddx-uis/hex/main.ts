@@ -737,8 +737,8 @@ function hexToBytes(s: string): Uint8Array | null {
 export async function renderBufferFast(
   args: {
     denops: Denops;
-    buffer: { getBytes(start: number, len: number): Uint8Array };
-    uiParams: { highlights: Record<string, string> };
+    buffer: DdxBuffer;
+    uiParams: Params;
   },
   hasNvim: boolean,
   bufnr: number,
@@ -777,6 +777,7 @@ export async function renderBufferFast(
     const ascii = args.buffer.getChars(
       start,
       Math.min(length, size - start),
+      args.uiParams.encoding,
     );
 
     const addressString = ("00000000" + start.toString(16)).slice(-8);
