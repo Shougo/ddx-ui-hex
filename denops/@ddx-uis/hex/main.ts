@@ -7,7 +7,7 @@ import {
   type UiOptions,
 } from "@shougo/ddx-vim/types";
 import { BaseUi, type UiActions } from "@shougo/ddx-vim/ui";
-import { printError } from "@shougo/ddx-vim/utils";
+import { printError, stringToUint8Array } from "@shougo/ddx-vim/utils";
 
 import type { Denops } from "@denops/std";
 import * as op from "@denops/std/option";
@@ -435,11 +435,19 @@ export class Ui extends BaseUi<Params> {
       let bytesString = raw;
 
       if (type === "string") {
-        // Convert to hex string
-        const encoder = new TextEncoder();
-        bytesString = Array.from(encoder.encode(raw))
-          .map((b) => b.toString(16).padStart(2, "0"))
-          .join("");
+        const bytes = stringToUint8Array(
+          raw,
+          undefined,
+          args.uiParams.encoding,
+        );
+
+        // Fast hex conversion (lowercase)
+        const hexTable = new Array<string>(256);
+        for (let i = 0; i < 256; i++) {
+          hexTable[i] = i.toString(16).padStart(2, "0");
+        }
+
+        bytesString = Array.from(bytes, (b) => hexTable[b]).join("");
       }
 
       const pos = args.buffer.search(address, hexToBytes(bytesString));
