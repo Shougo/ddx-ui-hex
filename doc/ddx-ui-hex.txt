@@ -189,6 +189,13 @@ splitDirection	(string)
 
 		Default: "botright"
 
+                                                 *ddx-ui-hex-param-statusline*
+statusline	(boolean)
+		If it is true, the original 'statusline' value is set on the
+		buffer.
+
+		Default: v:true
+
                                                      *ddx-ui-hex-param-winCol*
 winCol		(number)
 		Set the column position of the window if

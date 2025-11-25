@@ -12,6 +12,7 @@ import { printError, stringToUint8Array } from "@shougo/ddx-vim/utils";
 import type { Denops } from "@denops/std";
 import * as op from "@denops/std/option";
 import * as fn from "@denops/std/function";
+import * as vars from "@denops/std/variable";
 import { batch } from "@denops/std/batch";
 
 export type FloatingBorder =
@@ -55,6 +56,7 @@ export type Params = {
   highlights: HighlightGroup;
   split: "horizontal" | "vertical" | "floating" | "no";
   splitDirection: "botright" | "topleft";
+  statusline: boolean;
   winCol: number;
   winHeight: number;
   winRow: number;
@@ -134,6 +136,15 @@ export class Ui extends BaseUi<Params> {
     if (!this.#buffers[args.options.name] || winid < 0) {
       await this.#initOptions(args.denops, args.options, args.uiParams, bufnr);
     }
+
+    await setStatusline(
+      args.denops,
+      args.options,
+      args.uiParams,
+      await fn.bufwinid(args.denops, bufnr),
+      floating,
+      `ddx-ui-hex-${bufnr}`,
+    );
 
     this.#buffers[args.options.name] = bufnr;
 
@@ -236,7 +247,7 @@ export class Ui extends BaseUi<Params> {
       const params = args.actionParams as ChangeParams;
 
       // Get address
-      const address = await this.#getAddress(args.denops, args.uiParams);
+      const address = await this.#getAddress(args.denops);
       if (Number.isNaN(address)) {
         await printError(
           args.denops,
@@ -310,7 +321,7 @@ export class Ui extends BaseUi<Params> {
       uiParams: Params;
     }) => {
       // Get address
-      const address = await this.#getAddress(args.denops, args.uiParams);
+      const address = await this.#getAddress(args.denops);
       if (Number.isNaN(address)) {
         await printError(
           args.denops,
@@ -353,7 +364,7 @@ export class Ui extends BaseUi<Params> {
       uiParams: Params;
     }) => {
       // Get address
-      const address = await this.#getAddress(args.denops, args.uiParams);
+      const address = await this.#getAddress(args.denops);
       if (Number.isNaN(address)) {
         await printError(
           args.denops,
@@ -413,7 +424,7 @@ export class Ui extends BaseUi<Params> {
       const params = args.actionParams as SearchParams;
 
       // Get address
-      const address = await this.#getAddress(args.denops, args.uiParams);
+      const address = await this.#getAddress(args.denops);
       if (Number.isNaN(address)) {
         await printError(
           args.denops,
@@ -471,7 +482,7 @@ export class Ui extends BaseUi<Params> {
       uiParams: Params;
     }) => {
       // Get address
-      const address = await this.#getAddress(args.denops, args.uiParams);
+      const address = await this.#getAddress(args.denops);
       if (Number.isNaN(address)) {
         await printError(
           args.denops,
@@ -552,6 +563,7 @@ export class Ui extends BaseUi<Params> {
       highlights: {},
       split: "horizontal",
       splitDirection: "botright",
+      statusline: true,
       winCol: 0,
       winHeight: 20,
       winRow: 0,
@@ -655,18 +667,9 @@ export class Ui extends BaseUi<Params> {
     }
   }
 
-  async #getAddress(denops: Denops, uiParams: Params) {
-    const currentLine = await fn.getline(denops, ".");
-    const curText = await denops.call(
-      "ddx#ui#hex#get_cur_text",
-      currentLine,
-      await fn.col(denops, "."),
-    );
+  async #getAddress(denops: Denops) {
     const [_type, addressString] = await denops.call(
-      "ddx#ui#hex#parse_address",
-      currentLine,
-      curText,
-      uiParams.encoding,
+      "ddx#ui#hex#_get_current_address",
     ) as string[];
 
     return Number(addressString);
@@ -892,5 +895,70 @@ export async function setBufLines(
     // deletebufline(bufnr, start, end) deletes inclusive range of lines
     // (1-based)
     await fn.deletebufline(denops, bufnr, deleteStart, deleteEnd);
+  }
+}
+
+async function setStatusline(
+  denops: Denops,
+  options: DdxOptions,
+  uiParams: Params,
+  winid: number,
+  floating: boolean,
+  augroupName: string,
+): Promise<void> {
+  const statusState = {
+    name: options.name,
+  };
+  await fn.setwinvar(
+    denops,
+    winid,
+    "ddx_ui_hex_status",
+    statusState,
+  );
+
+  if (!uiParams.statusline) {
+    return;
+  }
+
+  const header = `[ddx-${options.name}]`;
+
+  const linenr = [
+    "printf('%'.(('$'->line())->len()+2).'d/%d 0x%08x',",
+    "'.'->line(),",
+    "'$'->line(), ",
+    "ddx#ui#hex#_get_current_address()[1])",
+  ].join("");
+
+  const footer = "";
+
+  if (floating || await op.laststatus.getGlobal(denops) === 0) {
+    if (await vars.g.get(denops, "ddx#ui#hex#_save_title", "") === "") {
+      await vars.g.set(
+        denops,
+        "ddx#ui#hex#_save_title",
+        await op.titlestring.getGlobal(denops),
+      );
+    }
+
+    await denops.cmd(
+      `autocmd ${augroupName} WinClosed,BufLeave <buffer>` +
+        " let &titlestring=g:ddx#ui#hex#_save_title",
+    );
+
+    const titleString = `${header} %{${linenr}}%*${footer}`;
+    await vars.b.set(denops, "ddx_ui_hex_title", titleString);
+    await op.titlestring.setGlobal(denops, titleString);
+
+    await denops.cmd(
+      `autocmd ${augroupName} WinEnter,BufEnter <buffer>` +
+        " let &titlestring=b:->get('ddx_ui_hex_title', '')",
+    );
+  } else {
+    await fn.setwinvar(
+      denops,
+      winid,
+      "&statusline",
+      `${header.replaceAll("%", "%%")} %#LineNR#%{${linenr}}%*${footer}`,
+    );
   }
 }

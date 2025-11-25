@@ -51,10 +51,7 @@ function ddx#ui#hex#_highlight_cursor() abort
     return
   endif
 
-  const current_line = '.'->getline()
-  const cur_text = ddx#ui#hex#get_cur_text(current_line, '.'->col())
-  const [type, address] = ddx#ui#hex#parse_address(
-        \ current_line, cur_text, b:ddx_ui_hex_encoding)
+  const [type, address] = ddx#ui#hex#_get_current_address()
   "echomsg [type, address]
 
   const highlight_id = 100
@@ -67,4 +64,11 @@ function ddx#ui#hex#_highlight_cursor() abort
     const highlight = b:ddx_ui_hex_highlights->get('cursorAscii', 'Search')
     call matchadd(highlight, pattern, 100, highlight_id)
   endif
+endfunction
+
+function ddx#ui#hex#_get_current_address() abort
+  const current_line = '.'->getline()
+  const cur_text = ddx#ui#hex#get_cur_text(current_line, '.'->col())
+  return ddx#ui#hex#parse_address(
+        \ current_line, cur_text, b:ddx_ui_hex_encoding)
 endfunction
