@@ -142,7 +142,6 @@ export class Ui extends BaseUi<Params> {
       args.options,
       args.uiParams,
       await fn.bufwinid(args.denops, bufnr),
-      floating,
       `ddx-ui-hex-${bufnr}`,
     );
 
@@ -903,7 +902,6 @@ async function setStatusline(
   options: DdxOptions,
   uiParams: Params,
   winid: number,
-  floating: boolean,
   augroupName: string,
 ): Promise<void> {
   const statusState = {
@@ -931,7 +929,7 @@ async function setStatusline(
 
   const footer = "";
 
-  if (floating || await op.laststatus.getGlobal(denops) === 0) {
+  if (await op.laststatus.getGlobal(denops) === 0) {
     if (await vars.g.get(denops, "ddx#ui#hex#_save_title", "") === "") {
       await vars.g.set(
         denops,
