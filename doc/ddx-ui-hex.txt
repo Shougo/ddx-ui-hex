@@ -172,6 +172,22 @@ highlights	(dictionary)
 
 		Default: {}
 
+                                        *ddx-ui-hex-param-overwriteStatusline*
+overwriteStatusline (boolean)
+		If it is true, the original 'statusline' value is set on the
+		buffer.
+
+		Default: v:true
+
+                                             *ddx-ui-hex-param-overwriteTitle*
+overwriteTitle	(boolean)
+		If it is true, the original 'titlestring' value is set on the
+		buffer.
+
+		Default:
+			v:false
+			v:true (When 'laststatus' is 0)
+
                                                       *ddx-ui-hex-param-split*
 split		(string)
 		Specify split mode. Following values are available:
@@ -188,13 +204,6 @@ splitDirection	(string)
 		Specify split direction.
 
 		Default: "botright"
-
-                                                 *ddx-ui-hex-param-statusline*
-statusline	(boolean)
-		If it is true, the original 'statusline' value is set on the
-		buffer.
-
-		Default: v:true
 
                                                      *ddx-ui-hex-param-winCol*
 winCol		(number)
@@ -251,6 +260,9 @@ FREQUENTLY ASKED QUESTIONS (FAQ)                              *ddx-ui-hex-faq*
 
 ==============================================================================
 COMPATIBILITY                                       *ddx-ui-hex-compatibility*
+
+2025.12.02
+* Rename "statusline" param to "overwriteStatusline".
 
 ==============================================================================
 vim:tw=78:ts=8:ft=help:norl:noet:fen:noet:

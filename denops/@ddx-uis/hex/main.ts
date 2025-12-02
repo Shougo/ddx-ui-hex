@@ -54,9 +54,10 @@ export type Params = {
   encoding: "utf-8";
   floatingBorder: FloatingBorder;
   highlights: HighlightGroup;
+  overwriteStatusline: boolean;
+  overwriteTitle: boolean;
   split: "horizontal" | "vertical" | "floating" | "no";
   splitDirection: "botright" | "topleft";
-  statusline: boolean;
   winCol: number;
   winHeight: number;
   winRow: number;
@@ -560,9 +561,10 @@ export class Ui extends BaseUi<Params> {
       encoding: "utf-8",
       floatingBorder: "none",
       highlights: {},
+      overwriteStatusline: true,
+      overwriteTitle: false,
       split: "horizontal",
       splitDirection: "botright",
-      statusline: true,
       winCol: 0,
       winHeight: 20,
       winRow: 0,
@@ -646,6 +648,10 @@ export class Ui extends BaseUi<Params> {
         await fn.setbufvar(denops, bufnr, "&winfixheight", 1);
       } else if (uiParams.split == "vertical") {
         await fn.setbufvar(denops, bufnr, "&winfixwidth", 1);
+      }
+
+      if (uiParams.split === "floating") {
+        await fn.setwinvar(denops, winid, "&statusline", "");
       }
     });
   }
@@ -914,10 +920,6 @@ async function setStatusline(
     statusState,
   );
 
-  if (!uiParams.statusline) {
-    return;
-  }
-
   const header = `[ddx-${options.name}]`;
 
   const linenr = [
@@ -926,10 +928,11 @@ async function setStatusline(
     "'$'->line(), ",
     "ddx#ui#hex#_get_current_address()[1])",
   ].join("");
+  const laststatus = await op.laststatus.getGlobal(denops);
 
   const footer = "";
 
-  if (await op.laststatus.getGlobal(denops) === 0) {
+  if (laststatus === 0 || uiParams.overwriteTitle) {
     if (await vars.g.get(denops, "ddx#ui#hex#_save_title", "") === "") {
       await vars.g.set(
         denops,
@@ -951,7 +954,7 @@ async function setStatusline(
       `autocmd ${augroupName} WinEnter,BufEnter <buffer>` +
         " let &titlestring=b:->get('ddx_ui_hex_title', '')",
     );
-  } else {
+  } else if (uiParams.overwriteStatusline) {
     await fn.setwinvar(
       denops,
       winid,
