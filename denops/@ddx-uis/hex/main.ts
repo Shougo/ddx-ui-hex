@@ -612,7 +612,7 @@ export class Ui extends BaseUi<Params> {
       await fn.setbufvar(
         denops,
         bufnr,
-        "ddx_ui_hex_encoding",
+        "ddx_ui_encoding",
         uiParams.encoding,
       );
       await fn.setbufvar(
@@ -767,7 +767,10 @@ export async function renderBufferFast(
   changedAdresses: Set<number>,
 ) {
   const lines: string[] = [];
-  const hlOps: Array<[number, number, number, string]> = []; // [lnum, colStart (0-based), len, hlGroup]
+
+  // [lnum, colStart (0-based), len, hlGroup]
+  const hlOps: Array<[number, number, number, string]> = [];
+
   let start = startOffset;
   let lnum = lnumStart; // 1-based line number in vim
 
