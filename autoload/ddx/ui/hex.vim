@@ -67,6 +67,10 @@ function ddx#ui#hex#_highlight_cursor() abort
 endfunction
 
 function ddx#ui#hex#_get_current_address() abort
+  if !'b:ddx_ui_encoding'->exists()
+    return ['', 0]
+  endif
+
   const current_line = '.'->getline()
   const cur_text = ddx#ui#hex#get_cur_text(current_line, '.'->col())
   return ddx#ui#hex#parse_address(
