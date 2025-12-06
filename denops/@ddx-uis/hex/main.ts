@@ -69,6 +69,7 @@ export class Ui extends BaseUi<Params> {
   #namespace: number = 0;
   #offset: number = 0;
   #selectedStartAddress: number = -1;
+  #prevSize: number = 0;
 
   override async redraw(args: {
     denops: Denops;
@@ -150,6 +151,10 @@ export class Ui extends BaseUi<Params> {
 
     const modified = await fn.getbufvar(args.denops, bufnr, "&modified");
     const size = args.buffer.getSize();
+    if (size < this.#prevSize) {
+      // Clear previous buffer
+      await fn.deletebufline(args.denops, bufnr, 1, "$");
+    }
     const length = 16;
     const changedAdresses = args.buffer.getChangedAddresses();
 
@@ -167,6 +172,8 @@ export class Ui extends BaseUi<Params> {
     );
 
     await fn.setbufvar(args.denops, bufnr, "&modified", modified);
+
+    this.#prevSize = size;
   }
 
   override async jump(args: {
