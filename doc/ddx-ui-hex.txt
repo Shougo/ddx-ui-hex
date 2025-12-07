@@ -64,6 +64,10 @@ change
 insert
 		Insert the value in current address.
 
+                                                     *ddx-ui-hex-action-paste*
+paste
+		Paste previous removed values.
+
                                                       *ddx-ui-hex-action-quit*
 quit
 		Quit the UI window.
