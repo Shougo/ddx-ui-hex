@@ -70,7 +70,7 @@ export class Ui extends BaseUi<Params> {
   #offset: number = 0;
   #selectedStartAddress: number = -1;
   #prevSize: number = 0;
-  #cutBytes: Uint8Array = Uint8Array.from([]);;
+  #savedBytes: Uint8Array = Uint8Array.from([]);;
 
   override async redraw(args: {
     denops: Denops;
@@ -321,6 +321,39 @@ export class Ui extends BaseUi<Params> {
 
       return ActionFlags.Redraw;
     },
+    copy: async (args: {
+      denops: Denops;
+      context: Context;
+      options: DdxOptions;
+      buffer: DdxBuffer;
+      uiParams: Params;
+      actionParams: BaseParams;
+    }) => {
+      // Get address
+      const address = await this.#getAddress(args.denops);
+      if (Number.isNaN(address)) {
+        await printError(
+          args.denops,
+          "Invalid address",
+        );
+        return ActionFlags.Persist;
+      }
+
+      const isRange = this.#selectedStartAddress >= 0 &&
+        address !== this.#selectedStartAddress;
+      if (isRange) {
+        const rangeLength = Math.abs(this.#selectedStartAddress - address) + 1;
+        const rangeStart = Math.min(address, this.#selectedStartAddress);
+
+        this.#savedBytes = args.buffer.getBytes(rangeStart, rangeLength);
+      } else {
+        this.#savedBytes = args.buffer.getBytes(address, 1);
+      }
+
+      this.#selectedStartAddress = -1;
+
+      return ActionFlags.Persist;
+    },
     insert: async (args: {
       denops: Denops;
       context: Context;
@@ -381,8 +414,7 @@ export class Ui extends BaseUi<Params> {
         return ActionFlags.Persist;
       }
 
-      args.buffer.insert(address, this.#cutBytes);
-      this.#cutBytes = Uint8Array.from([]);
+      args.buffer.insert(address, this.#savedBytes);
 
       const bufnr = this.#buffers[args.options.name];
       await fn.setbufvar(args.denops, bufnr, "&modified", true);
@@ -412,10 +444,10 @@ export class Ui extends BaseUi<Params> {
         const start = Math.min(address, this.#selectedStartAddress);
         const length = Math.abs(this.#selectedStartAddress - address);
         if (length > 0) {
-          this.#cutBytes = args.buffer.remove(start, length);
+          this.#savedBytes = args.buffer.remove(start, length);
         }
       } else {
-        this.#cutBytes = args.buffer.remove(address);
+        this.#savedBytes = args.buffer.remove(address);
       }
 
       const bufnr = this.#buffers[args.options.name];

@@ -60,6 +60,11 @@ change
 				"hex": hexa decimal string (Default)
 				"string": string
 
+                                                      *ddx-ui-hex-action-copy*
+copy
+		Copy current address value.
+		If the address is selected, ranged adress is copied.
+
                                                     *ddx-ui-hex-action-insert*
 insert
 		Insert the value in current address.
