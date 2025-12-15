@@ -70,7 +70,7 @@ export class Ui extends BaseUi<Params> {
   #offset: number = 0;
   #selectedStartAddress: number = -1;
   #prevSize: number = 0;
-  #savedBytes: Uint8Array = Uint8Array.from([]);;
+  #savedBytes: Uint8Array = Uint8Array.from([]);
 
   override async redraw(args: {
     denops: Denops;
@@ -163,7 +163,7 @@ export class Ui extends BaseUi<Params> {
       args,
       hasNvim,
       bufnr,
-      0,
+      this.#offset,
       length,
       size,
       1,
@@ -789,7 +789,9 @@ async function searchAddress(
 
   await fn.cursor(denops, 1, 1);
 
-  const baseAddress = ("00000000" + address.toString()).slice(-8);
+  const baseAddress = (offset + address).toString(16).padStart(8, "0").slice(
+    -8,
+  );
   const addressOffset = address & 0x0f;
 
   const col = addressOffset * 3 + baseAddress.length + 3;
@@ -864,7 +866,7 @@ export async function renderBufferFast(
       args.uiParams.encoding,
     );
 
-    const addressString = ("00000000" + start.toString(16)).slice(-8);
+    const addressString = start.toString(16).padStart(8, "0").slice(-8);
     const hex = arrayBufferToHexFast(bytes);
     const padding = " ".repeat((16 - bytes.length) * 3);
 
