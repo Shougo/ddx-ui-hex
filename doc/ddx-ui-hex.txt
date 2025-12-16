@@ -60,6 +60,16 @@ change
 				"hex": hexa decimal string (Default)
 				"string": string
 
+                                                  *ddx-ui-hex-action-checksum*
+checksum
+		Print checksum value.
+		The address must be selected.
+
+		params:
+			{method}: Checksum method.
+
+				"sum": Simple sum (Default)
+
                                                       *ddx-ui-hex-action-copy*
 copy
 		Copy current address value.

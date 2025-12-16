@@ -50,6 +50,10 @@ export type SearchParams = {
   type?: "hex" | "string";
 };
 
+export type CheckSumParams = {
+  method?: "sum";
+};
+
 export type Params = {
   encoding: "utf-8";
   floatingBorder: FloatingBorder;
@@ -320,6 +324,54 @@ export class Ui extends BaseUi<Params> {
       this.#selectedStartAddress = -1;
 
       return ActionFlags.Redraw;
+    },
+    checksum: async (args: {
+      denops: Denops;
+      context: Context;
+      options: DdxOptions;
+      buffer: DdxBuffer;
+      uiParams: Params;
+      actionParams: BaseParams;
+    }) => {
+      // Get address
+      const address = await this.#getAddress(args.denops);
+      if (Number.isNaN(address)) {
+        await printError(
+          args.denops,
+          "Invalid address",
+        );
+        return ActionFlags.Persist;
+      }
+
+      const isRange = this.#selectedStartAddress >= 0 &&
+        address !== this.#selectedStartAddress;
+      if (!isRange) {
+        await printError(
+          args.denops,
+          "The address is not selected.",
+        );
+        return ActionFlags.Persist;
+      }
+
+      const rangeLength = Math.abs(this.#selectedStartAddress - address) + 1;
+      const rangeStart = Math.min(address, this.#selectedStartAddress);
+
+      const bytes = args.buffer.getBytes(rangeStart, rangeLength);
+
+      function calculateChecksum(data: number[]): number {
+        let sum = 0;
+        for (const byte of data) {
+          sum += byte;
+        }
+        return sum & 0xff;
+      }
+
+      await args.denops.call(
+        "ddx#util#print",
+        `Checksum: "${calculateChecksum(bytes)}"`,
+      );
+
+      return ActionFlags.Persist;
     },
     copy: async (args: {
       denops: Denops;
