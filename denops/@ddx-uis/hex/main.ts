@@ -14,6 +14,7 @@ import * as op from "@denops/std/option";
 import * as fn from "@denops/std/function";
 import * as vars from "@denops/std/variable";
 import { batch } from "@denops/std/batch";
+import { crypto } from "@std/crypto";
 
 export type FloatingBorder =
   | "none"
@@ -50,8 +51,8 @@ export type SearchParams = {
   type?: "hex" | "string";
 };
 
-export type CheckSumParams = {
-  method?: "sum";
+export type ChecksumParams = {
+  method?: "sum" | "md5";
 };
 
 export type Params = {
@@ -333,6 +334,8 @@ export class Ui extends BaseUi<Params> {
       uiParams: Params;
       actionParams: BaseParams;
     }) => {
+      const params = args.actionParams as ChecksumParams;
+
       // Get address
       const address = await this.#getAddress(args.denops);
       if (Number.isNaN(address)) {
@@ -366,9 +369,23 @@ export class Ui extends BaseUi<Params> {
         return sum & 0xff;
       }
 
+      async function calculateMD5(data: number[]): Promise<string> {
+        const byteArray = new Uint8Array(data);
+
+        const hashBuffer = await crypto.subtle.digest("MD5", byteArray);
+
+        return Array.from(new Uint8Array(hashBuffer))
+          .map((b) => b.toString(16).padStart(2, "0"))
+          .join("");
+      }
+
+      const sum = params.method == "sum"
+        ? calculateChecksum(Array.from(bytes))
+        : await calculateMD5(Array.from(bytes));
+
       await args.denops.call(
         "ddx#util#print",
-        `Checksum: "${calculateChecksum(bytes)}"`,
+        `Checksum: "${sum}"`,
       );
 
       return ActionFlags.Persist;
@@ -578,7 +595,11 @@ export class Ui extends BaseUi<Params> {
         bytesString = Array.from(bytes, (b) => hexTable[b]).join("");
       }
 
-      const pos = args.buffer.search(address, hexToBytes(bytesString));
+      const bytes = hexToBytes(bytesString);
+      if (!bytes) {
+        return ActionFlags.Persist;
+      }
+      const pos = args.buffer.search(address, bytes);
 
       if (pos >= 0) {
         await searchAddress(args.denops, this.#offset, pos);

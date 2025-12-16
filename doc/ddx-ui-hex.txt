@@ -69,6 +69,7 @@ checksum
 			{method}: Checksum method.
 
 				"sum": Simple sum (Default)
+				"md5": MD5
 
                                                       *ddx-ui-hex-action-copy*
 copy
