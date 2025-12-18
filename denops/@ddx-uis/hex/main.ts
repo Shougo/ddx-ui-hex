@@ -7,7 +7,11 @@ import {
   type UiOptions,
 } from "@shougo/ddx-vim/types";
 import { BaseUi, type UiActions } from "@shougo/ddx-vim/ui";
-import { printError, stringToUint8Array } from "@shougo/ddx-vim/utils";
+import {
+  calculateBinaryDiff,
+  printError,
+  stringToUint8Array,
+} from "@shougo/ddx-vim/utils";
 
 import type { Denops } from "@denops/std";
 import * as op from "@denops/std/option";
@@ -82,6 +86,7 @@ export class Ui extends BaseUi<Params> {
     context: Context;
     options: DdxOptions;
     buffer: DdxBuffer;
+    anotherBuffer: DdxBuffer;
     uiOptions: UiOptions;
     uiParams: Params;
   }): Promise<void> {
@@ -893,7 +898,9 @@ function hexToBytes(s: string): Uint8Array | null {
 export async function renderBufferFast(
   args: {
     denops: Denops;
+    options: DdxOptions;
     buffer: DdxBuffer;
+    anotherBuffer: DdxBuffer;
     uiParams: Params;
   },
   hasNvim: boolean,
@@ -929,15 +936,15 @@ export async function renderBufferFast(
   };
 
   while (start < size) {
-    const bytes = args.buffer.getBytes(
-      start,
-      Math.min(length, size - start),
-    );
-    const ascii = args.buffer.getChars(
-      start,
-      Math.min(length, size - start),
-      args.uiParams.encoding,
-    );
+    const len = Math.min(length, size - start);
+    const bytes = args.buffer.getBytes(start, len);
+    const ascii = args.buffer.getChars(start, len, args.uiParams.encoding);
+
+    if (args.options.anotherPath.length > 0) {
+      const anotherBytes = args.anotherBuffer.getBytes(start, len);
+
+      console.log(calculateBinaryDiff(bytes, anotherBytes));
+    }
 
     const addressString = start.toString(16).padStart(8, "0").slice(-8);
     const hex = arrayBufferToHexFast(bytes);
