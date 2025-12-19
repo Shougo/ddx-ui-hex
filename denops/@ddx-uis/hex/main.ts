@@ -34,6 +34,7 @@ export type HighlightGroup = {
   changed?: string;
   control?: string;
   cursorAscii?: string;
+  diff?: string;
   escape?: string;
   ff?: string;
   floating?: string;
@@ -940,10 +941,15 @@ export async function renderBufferFast(
     const bytes = args.buffer.getBytes(start, len);
     const ascii = args.buffer.getChars(start, len, args.uiParams.encoding);
 
+    const diffOffsets = new Set<number>();
     if (args.options.anotherPath.length > 0) {
       const anotherBytes = args.anotherBuffer.getBytes(start, len);
 
-      console.log(calculateBinaryDiff(bytes, anotherBytes));
+      const diff = calculateBinaryDiff(bytes, anotherBytes);
+
+      diff.forEach(change => {
+        diffOffsets.add(change.offset);
+      });
     }
 
     const addressString = start.toString(16).padStart(8, "0").slice(-8);
@@ -966,6 +972,8 @@ export async function renderBufferFast(
         highlight = args.uiParams.highlights.selected ?? "Visual";
       } else if (changedAdresses.has(rowAddress)) {
         highlight = args.uiParams.highlights.changed ?? "ErrorMsg";
+      } else if (diffOffsets.has(i)) {
+        highlight = args.uiParams.highlights.diff ?? "DiffChange";
       } else if (byte === 0x00) {
         highlight = args.uiParams.highlights.null ?? "";
       } else if (byte === 0x09) {
