@@ -2,7 +2,7 @@
   "imports": {
     "@denops/std": "jsr:@denops/std@~8.1.0",
     "@lambdalisue/import-map-importer": "jsr:@lambdalisue/import-map-importer@~0.5.1",
-    "@shougo/ddx-vim": "jsr:@shougo/ddx-vim@~0.10.1",
+    "@shougo/ddx-vim": "jsr:@shougo/ddx-vim@~0.10.2",
     "@std/crypto": "jsr:@std/crypto@~1.0.5",
     "@std/streams": "jsr:@std/streams@~1.0.4"
   }
