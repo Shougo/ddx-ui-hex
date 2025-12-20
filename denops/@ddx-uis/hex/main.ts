@@ -34,7 +34,9 @@ export type HighlightGroup = {
   changed?: string;
   control?: string;
   cursorAscii?: string;
-  diff?: string;
+  diffAdd?: string;
+  diffChange?: string;
+  diffDelete?: string;
   escape?: string;
   ff?: string;
   floating?: string;
@@ -936,21 +938,34 @@ export async function renderBufferFast(
     return s;
   };
 
+  const changedOffsets = new Set<number>();
+  const addedOffsets = new Set<number>();
+  const deletedOffsets = new Set<number>();
+  if (args.options.anotherPath.length > 0) {
+    const allBytes = args.buffer.getBytes(start, size);
+    const allAnotherBytes = args.anotherBuffer.getBytes(start, size);
+
+    const diff = calculateBinaryDiff(allBytes, allAnotherBytes);
+
+    diff.forEach(change => {
+      switch (change.type) {
+        case "added":
+          addedOffsets.add(change.offset);
+          break;
+        case "changed":
+          changedOffsets.add(change.offset);
+          break;
+        case "deleted":
+          deletedOffsets.add(change.offset);
+          break;
+      }
+    });
+  }
+
   while (start < size) {
     const len = Math.min(length, size - start);
     const bytes = args.buffer.getBytes(start, len);
     const ascii = args.buffer.getChars(start, len, args.uiParams.encoding);
-
-    const diffOffsets = new Set<number>();
-    if (args.options.anotherPath.length > 0) {
-      const anotherBytes = args.anotherBuffer.getBytes(start, len);
-
-      const diff = calculateBinaryDiff(bytes, anotherBytes);
-
-      diff.forEach(change => {
-        diffOffsets.add(change.offset);
-      });
-    }
 
     const addressString = start.toString(16).padStart(8, "0").slice(-8);
     const hex = arrayBufferToHexFast(bytes);
@@ -972,8 +987,12 @@ export async function renderBufferFast(
         highlight = args.uiParams.highlights.selected ?? "Visual";
       } else if (changedAdresses.has(rowAddress)) {
         highlight = args.uiParams.highlights.changed ?? "ErrorMsg";
-      } else if (diffOffsets.has(i)) {
-        highlight = args.uiParams.highlights.diff ?? "DiffChange";
+      } else if (addedOffsets.has(rowAddress)) {
+        highlight = args.uiParams.highlights.diffAdd ?? "DiffAdd";
+      } else if (changedOffsets.has(rowAddress)) {
+        highlight = args.uiParams.highlights.diffChange ?? "DiffChange";
+      } else if (deletedOffsets.has(rowAddress)) {
+        highlight = args.uiParams.highlights.diffDelete ?? "DiffDelete";
       } else if (byte === 0x00) {
         highlight = args.uiParams.highlights.null ?? "";
       } else if (byte === 0x09) {

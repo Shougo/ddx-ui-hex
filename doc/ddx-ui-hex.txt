@@ -166,9 +166,17 @@ highlights	(dictionary)
 		Specify cursor ascii area highlight.
 		Default: "Search"
 
-		diff			(string)
+		diffAdd			(string)
+		Specify diff added highlight.
+		Default: "DiffAdd"
+
+		diffChange		(string)
 		Specify diff changed highlight.
-		Default: "DiffChanged"
+		Default: "DiffChange"
+
+		diffDelete		(string)
+		Specify diff deleted highlight.
+		Default: "DiffDelete"
 
 		escape			(string)
 		Specify escape code highlight.
