@@ -80,6 +80,10 @@ copy
 insert
 		Insert the value in current address.
 
+                                                  *ddx-ui-hex-action-nextDiff*
+nextDiff
+		Search the changed address from current address.
+
                                                      *ddx-ui-hex-action-paste*
 paste
 		Paste previous removed values.

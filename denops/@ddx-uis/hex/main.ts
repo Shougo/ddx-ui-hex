@@ -474,6 +474,50 @@ export class Ui extends BaseUi<Params> {
 
       return ActionFlags.Redraw;
     },
+    nextDiff: async (args: {
+      denops: Denops;
+      context: Context;
+      options: DdxOptions;
+      buffer: DdxBuffer;
+      anotherBuffer: DdxBuffer;
+      uiParams: Params;
+      actionParams: BaseParams;
+    }) => {
+      // Get address
+      const address = await this.#getAddress(args.denops);
+      if (Number.isNaN(address)) {
+        await printError(
+          args.denops,
+          "Invalid address",
+        );
+        return ActionFlags.Persist;
+      }
+
+      if (args.options.anotherPath.length == 0) {
+        await printError(
+          args.denops,
+          "anotherPath option is required",
+        );
+
+        return ActionFlags.Persist;
+      }
+
+      const baseAddress = address + 1;
+      const size = args.buffer.getSize();
+      const allBytes = args.buffer.getBytes(baseAddress, size);
+      const allAnotherBytes = args.anotherBuffer.getBytes(baseAddress, size);
+
+      const diff = calculateBinaryDiff(allBytes, allAnotherBytes);
+      if (diff.length > 0) {
+        await searchAddress(
+          args.denops,
+          this.#offset,
+          baseAddress + diff[0].offset,
+        );
+      }
+
+      return ActionFlags.Persist;
+    },
     paste: async (args: {
       denops: Denops;
       context: Context;
@@ -554,6 +598,25 @@ export class Ui extends BaseUi<Params> {
       await fn.setbufvar(args.denops, bufnr, "&modified", false);
 
       return ActionFlags.Persist;
+    },
+    redo: async (args: {
+      denops: Denops;
+      context: Context;
+      options: DdxOptions;
+      buffer: DdxBuffer;
+      uiParams: Params;
+    }) => {
+      args.buffer.redo();
+
+      const bufnr = this.#buffers[args.options.name];
+      await fn.setbufvar(
+        args.denops,
+        bufnr,
+        "&modified",
+        true,
+      );
+
+      return ActionFlags.Redraw;
     },
     search: async (args: {
       denops: Denops;
@@ -661,25 +724,6 @@ export class Ui extends BaseUi<Params> {
       });
 
       return ActionFlags.None;
-    },
-    redo: async (args: {
-      denops: Denops;
-      context: Context;
-      options: DdxOptions;
-      buffer: DdxBuffer;
-      uiParams: Params;
-    }) => {
-      args.buffer.redo();
-
-      const bufnr = this.#buffers[args.options.name];
-      await fn.setbufvar(
-        args.denops,
-        bufnr,
-        "&modified",
-        true,
-      );
-
-      return ActionFlags.Redraw;
     },
     undo: async (args: {
       denops: Denops;
@@ -947,7 +991,7 @@ export async function renderBufferFast(
 
     const diff = calculateBinaryDiff(allBytes, allAnotherBytes);
 
-    diff.forEach(change => {
+    diff.forEach((change) => {
       switch (change.type) {
         case "added":
           addedOffsets.add(change.offset);
