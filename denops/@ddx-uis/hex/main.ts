@@ -228,18 +228,14 @@ export class Ui extends BaseUi<Params> {
       await fn.bufwinid(args.denops, bufnr),
     );
 
-    const prevWinnr = await fn.winnr(args.denops, "#");
-
-    for (
-      const winid of (await fn.win_findbuf(args.denops, bufnr) as number[])
-    ) {
+    const winIds = await fn.win_findbuf(args.denops, bufnr) as number[];
+    for (const winid of winIds) {
       if (winid <= 0) {
         continue;
       }
 
       if (
-        args.uiParams.split == "no" ||
-        !(prevWinnr > 0 && prevWinnr !== await fn.winnr(args.denops))
+        args.uiParams.split == "no" || await fn.winnr(args.denops, "$") == 1
       ) {
         await fn.setwinvar(args.denops, winid, "&winfixbuf", false);
 
@@ -288,7 +284,6 @@ export class Ui extends BaseUi<Params> {
       }
 
       let bytesString = raw;
-
       if (type === "string") {
         // Convert to hex string
         const encoder = new TextEncoder();
@@ -297,17 +292,25 @@ export class Ui extends BaseUi<Params> {
           .join("");
       }
 
+      const bytes = hexToBytes(bytesString);
+      if (bytes === null) {
+        await printError(
+          args.denops,
+          "Invalid value",
+        );
+        return ActionFlags.Persist;
+      }
+
       const isRange = this.#selectedStartAddress >= 0 &&
         address !== this.#selectedStartAddress;
       if (isRange) {
         const rangeLength = Math.abs(this.#selectedStartAddress - address) + 1;
         const rangeStart = Math.min(address, this.#selectedStartAddress);
 
-        const bytes = hexToBytes(bytesString);
-        if (bytes === null || bytes.length !== rangeLength) {
+        if (bytes.length !== rangeLength) {
           await printError(
             args.denops,
-            `Invalid value or length mismatch (expected ${rangeLength} bytes in hex).`,
+            `Length mismatch (expected ${rangeLength} bytes in hex).`,
           );
           return ActionFlags.Persist;
         }
@@ -315,16 +318,7 @@ export class Ui extends BaseUi<Params> {
         // Apply the bytes starting at `start`
         args.buffer.changeBytes(rangeStart, bytes);
       } else {
-        const value = parseStrictInt(bytesString, 16);
-        if (Number.isNaN(value) || value > 255 || value < 0) {
-          await printError(
-            args.denops,
-            "Invalid value",
-          );
-          return ActionFlags.Persist;
-        }
-
-        args.buffer.change(address, value);
+        args.buffer.changeBytes(address, bytes);
       }
 
       const bufnr = this.#buffers[args.options.name];
@@ -437,7 +431,10 @@ export class Ui extends BaseUi<Params> {
       options: DdxOptions;
       buffer: DdxBuffer;
       uiParams: Params;
+      actionParams: BaseParams;
     }) => {
+      const params = args.actionParams as ChangeParams;
+
       // Get address
       const address = await this.#getAddress(args.denops);
       if (Number.isNaN(address)) {
@@ -448,16 +445,27 @@ export class Ui extends BaseUi<Params> {
         return ActionFlags.Persist;
       }
 
-      const input = await args.denops.call(
+      const type = params.type ?? "hex";
+
+      const raw = await args.denops.call(
         "ddx#util#input",
         "New value: ",
       ) as string;
-      if (input == "") {
+      if (raw == "") {
         return ActionFlags.Persist;
       }
 
-      const value = parseStrictInt(input, 16);
-      if (Number.isNaN(value) || value > 255 || value < 0) {
+      let bytesString = raw;
+      if (type === "string") {
+        // Convert to hex string
+        const encoder = new TextEncoder();
+        bytesString = Array.from(encoder.encode(raw))
+          .map((b) => b.toString(16).padStart(2, "0"))
+          .join("");
+      }
+
+      const bytes = hexToBytes(bytesString);
+      if (bytes === null) {
         await printError(
           args.denops,
           "Invalid value",
@@ -465,9 +473,7 @@ export class Ui extends BaseUi<Params> {
         return ActionFlags.Persist;
       }
 
-      const insertValue = new Uint8Array([value]);
-
-      args.buffer.insert(address, insertValue);
+      args.buffer.insert(address, bytes);
 
       const bufnr = this.#buffers[args.options.name];
       await fn.setbufvar(args.denops, bufnr, "&modified", true);
@@ -871,36 +877,6 @@ export class Ui extends BaseUi<Params> {
   }
 }
 
-function parseStrictInt(str: string, radix: number = 10): number {
-  if (typeof str !== "string" || str.trim() === "") {
-    return NaN;
-  }
-
-  let pattern: RegExp;
-  switch (radix) {
-    case 2:
-      pattern = /^-?[01]+$/;
-      break;
-    case 8:
-      pattern = /^-?[0-7]+$/;
-      break;
-    case 10:
-      pattern = /^-?\d+$/;
-      break;
-    case 16:
-      pattern = /^-?[0-9a-fA-F]+$/;
-      break;
-    default:
-      return NaN;
-  }
-
-  if (!pattern.test(str.trim())) {
-    return NaN;
-  }
-  const n = parseInt(str, radix);
-  return Number.isNaN(n) ? NaN : n;
-}
-
 async function searchAddress(
   denops: Denops,
   offset: number,
@@ -1062,6 +1038,13 @@ export async function renderBufferFast(
     start += length;
     lnum += 1;
   }
+
+  await args.denops.call(
+    "ddx#util#clear_highlights",
+    bufnr,
+    "ddx-byte-highlights",
+    namespace,
+  );
 
   const startIdx0 = lnumStart - 1;
   const endIdx0 = startIdx0 + lines.length;
