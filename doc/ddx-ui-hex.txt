@@ -55,7 +55,7 @@ change
 		If the address is selected, ranged values are changed.
 
 		params:
-			{type}: Change value type.
+			{type}: Value type.
 
 				"hex": hexa decimal string (Default)
 				"string": string
@@ -81,7 +81,7 @@ insert
 		Insert the value in current address.
 
 		params:
-			{type}: Change value type.
+			{type}: Value type.
 
 				"hex": hexa decimal string (Default)
 				"string": string
@@ -113,10 +113,18 @@ search
 		Search the value from current address.
 
 		params:
-			{type}: Search value type.
+			{type}: Value type.
 
 				"hex": hexa decimal string (Default)
 				"string": string
+
+                                                      *ddx-ui-hex-action-save*
+save
+		params:
+			{path}: Save filename path.
+
+		Save current buffer to {path}.
+		If {path} is empty, the opened file path will be used.
 
                                              *ddx-ui-hex-action-selectAddress*
 selectAddress
@@ -127,13 +135,15 @@ selectAddress
 undo
 		Undo the last change.
 
-                                                      *ddx-ui-hex-action-save*
-save
-		params:
-			{path}: Save filename path.
+                                                      *ddx-ui-hex-action-yank*
+yank
+		Yank the value in current address.
 
-		Save current buffer to {path}.
-		If {path} is empty, the opened file path will be used.
+		params:
+			{type}: Value type.
+
+				"hex": hexa decimal string (Default)
+				"string": string
 
 ==============================================================================
 PARAMS                                                     *ddx-ui-hex-params*

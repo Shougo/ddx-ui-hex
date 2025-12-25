@@ -46,15 +46,11 @@ export type HighlightGroup = {
   tab?: string;
 };
 
-export type ChangeParams = {
-  type?: "hex" | "string";
-};
-
 export type SaveParams = {
   path?: string;
 };
 
-export type SearchParams = {
+export type TypeParams = {
   type?: "hex" | "string";
 };
 
@@ -261,7 +257,7 @@ export class Ui extends BaseUi<Params> {
       uiParams: Params;
       actionParams: BaseParams;
     }) => {
-      const params = args.actionParams as ChangeParams;
+      const params = args.actionParams as TypeParams;
 
       // Get address
       const address = await this.#getAddress(args.denops);
@@ -423,7 +419,7 @@ export class Ui extends BaseUi<Params> {
 
       this.#selectedStartAddress = -1;
 
-      return ActionFlags.Persist;
+      return ActionFlags.Redraw;
     },
     insert: async (args: {
       denops: Denops;
@@ -433,7 +429,7 @@ export class Ui extends BaseUi<Params> {
       uiParams: Params;
       actionParams: BaseParams;
     }) => {
-      const params = args.actionParams as ChangeParams;
+      const params = args.actionParams as TypeParams;
 
       // Get address
       const address = await this.#getAddress(args.denops);
@@ -632,7 +628,7 @@ export class Ui extends BaseUi<Params> {
       uiParams: Params;
       actionParams: BaseParams;
     }) => {
-      const params = args.actionParams as SearchParams;
+      const params = args.actionParams as TypeParams;
 
       // Get address
       const address = await this.#getAddress(args.denops);
@@ -747,6 +743,58 @@ export class Ui extends BaseUi<Params> {
         "&modified",
         historyLength > 0,
       );
+
+      return ActionFlags.Redraw;
+    },
+    yank: async (args: {
+      denops: Denops;
+      context: Context;
+      options: DdxOptions;
+      buffer: DdxBuffer;
+      uiParams: Params;
+      actionParams: BaseParams;
+    }) => {
+      const params = args.actionParams as TypeParams;
+
+      // Get address
+      const address = await this.#getAddress(args.denops);
+      if (Number.isNaN(address)) {
+        await printError(
+          args.denops,
+          "Invalid address",
+        );
+        return ActionFlags.Persist;
+      }
+
+      const type = params.type ?? "hex";
+
+      const isRange = this.#selectedStartAddress >= 0 &&
+        address !== this.#selectedStartAddress;
+      const rangeStart = isRange
+        ? Math.min(address, this.#selectedStartAddress)
+        : address;
+      const rangeLength = isRange
+        ? Math.abs(this.#selectedStartAddress - address) + 1
+        : 1;
+
+      const text = (type === "hex")
+        ? args.buffer.getBytes(rangeStart, rangeLength).toString(16)
+        : args.buffer.getChars(rangeStart, rangeLength);
+
+      await fn.setreg(args.denops, '"', text, "v");
+      await fn.setreg(
+        args.denops,
+        await vars.v.get(args.denops, "register"),
+        text,
+        "v",
+      );
+
+      await args.denops.call(
+        "ddx#util#print",
+        `Yanked "${text}"`,
+      );
+
+      this.#selectedStartAddress = -1;
 
       return ActionFlags.Redraw;
     },
