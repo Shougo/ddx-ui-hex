@@ -228,6 +228,8 @@ highlights	(dictionary)
 overwriteStatusline (boolean)
 		If it is true, the original 'statusline' value is set on the
 		buffer.
+		NOTE: You can get the status line information by
+		"w:ddx_ui_hex_status" variable.
 
 		Default: v:true
 
@@ -235,6 +237,8 @@ overwriteStatusline (boolean)
 overwriteTitle	(boolean)
 		If it is true, the original 'titlestring' value is set on the
 		buffer.
+		NOTE: You can get the status line information by
+		"w:ddx_ui_hex_status" variable.
 
 		Default:
 			v:false
