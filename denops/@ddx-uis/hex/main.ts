@@ -299,23 +299,22 @@ export class Ui extends BaseUi<Params> {
 
       const isRange = this.#selectedStartAddress >= 0 &&
         address !== this.#selectedStartAddress;
-      if (isRange) {
-        const rangeLength = Math.abs(this.#selectedStartAddress - address) + 1;
-        const rangeStart = Math.min(address, this.#selectedStartAddress);
+      const rangeStart = isRange
+        ? Math.min(address, this.#selectedStartAddress)
+        : address;
+      const rangeLength = isRange
+        ? Math.abs(this.#selectedStartAddress - address) + 1
+        : 1;
 
-        if (bytes.length !== rangeLength) {
-          await printError(
-            args.denops,
-            `Length mismatch (expected ${rangeLength} bytes in hex).`,
-          );
-          return ActionFlags.Persist;
-        }
-
-        // Apply the bytes starting at `start`
-        args.buffer.changeBytes(rangeStart, bytes);
-      } else {
-        args.buffer.changeBytes(address, bytes);
+      if (bytes.length !== rangeLength) {
+        await printError(
+          args.denops,
+          `Length mismatch (expected ${rangeLength} bytes in hex).`,
+        );
+        return ActionFlags.Persist;
       }
+
+      args.buffer.changeBytes(rangeStart, bytes);
 
       const bufnr = this.#buffers[args.options.name];
       await fn.setbufvar(args.denops, bufnr, "&modified", true);
@@ -354,8 +353,8 @@ export class Ui extends BaseUi<Params> {
         return ActionFlags.Persist;
       }
 
-      const rangeLength = Math.abs(this.#selectedStartAddress - address) + 1;
       const rangeStart = Math.min(address, this.#selectedStartAddress);
+      const rangeLength = Math.abs(this.#selectedStartAddress - address) + 1;
 
       const bytes = args.buffer.getBytes(rangeStart, rangeLength);
 
@@ -408,14 +407,14 @@ export class Ui extends BaseUi<Params> {
 
       const isRange = this.#selectedStartAddress >= 0 &&
         address !== this.#selectedStartAddress;
-      if (isRange) {
-        const rangeLength = Math.abs(this.#selectedStartAddress - address) + 1;
-        const rangeStart = Math.min(address, this.#selectedStartAddress);
+      const rangeStart = isRange
+        ? Math.min(address, this.#selectedStartAddress)
+        : address;
+      const rangeLength = isRange
+        ? Math.abs(this.#selectedStartAddress - address) + 1
+        : 1;
 
-        this.#savedBytes = args.buffer.getBytes(rangeStart, rangeLength);
-      } else {
-        this.#savedBytes = args.buffer.getBytes(address, 1);
-      }
+      this.#savedBytes = args.buffer.getBytes(rangeStart, rangeLength);
 
       this.#selectedStartAddress = -1;
 
