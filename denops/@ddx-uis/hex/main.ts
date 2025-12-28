@@ -4,6 +4,7 @@ import {
   type Context,
   type DdxBuffer,
   type DdxOptions,
+  type Encoding,
   type UiOptions,
 } from "@shougo/ddx-vim/types";
 import { BaseUi, type UiActions } from "@shougo/ddx-vim/ui";
@@ -59,7 +60,7 @@ export type ChecksumParams = {
 };
 
 export type Params = {
-  encoding: "utf-8";
+  encoding: Encoding;
   floatingBorder: FloatingBorder;
   highlights: HighlightGroup;
   overwriteStatusline: boolean;
@@ -279,16 +280,7 @@ export class Ui extends BaseUi<Params> {
         return ActionFlags.Persist;
       }
 
-      let bytesString = raw;
-      if (type === "string") {
-        // Convert to hex string
-        const encoder = new TextEncoder();
-        bytesString = Array.from(encoder.encode(raw))
-          .map((b) => b.toString(16).padStart(2, "0"))
-          .join("");
-      }
-
-      const bytes = hexToBytes(bytesString);
+      const bytes = stringToBytes(type, raw, args.uiParams.encoding);
       if (bytes === null) {
         await printError(
           args.denops,
@@ -450,16 +442,7 @@ export class Ui extends BaseUi<Params> {
         return ActionFlags.Persist;
       }
 
-      let bytesString = raw;
-      if (type === "string") {
-        // Convert to hex string
-        const encoder = new TextEncoder();
-        bytesString = Array.from(encoder.encode(raw))
-          .map((b) => b.toString(16).padStart(2, "0"))
-          .join("");
-      }
-
-      const bytes = hexToBytes(bytesString);
+      const bytes = stringToBytes(type, raw, args.uiParams.encoding);
       if (bytes === null) {
         await printError(
           args.denops,
@@ -542,6 +525,21 @@ export class Ui extends BaseUi<Params> {
       await fn.setbufvar(args.denops, bufnr, "&modified", true);
 
       return ActionFlags.Redraw;
+    },
+    quit: async (args: {
+      denops: Denops;
+      context: Context;
+      options: DdxOptions;
+      uiParams: Params;
+    }) => {
+      await this.quit({
+        denops: args.denops,
+        context: args.context,
+        options: args.options,
+        uiParams: args.uiParams,
+      });
+
+      return ActionFlags.None;
     },
     remove: async (args: {
       denops: Denops;
@@ -649,30 +647,12 @@ export class Ui extends BaseUi<Params> {
         return ActionFlags.Persist;
       }
 
-      let bytesString = raw;
-
-      if (type === "string") {
-        const bytes = stringToUint8Array(
-          raw,
-          undefined,
-          args.uiParams.encoding,
-        );
-
-        // Fast hex conversion (lowercase)
-        const hexTable = new Array<string>(256);
-        for (let i = 0; i < 256; i++) {
-          hexTable[i] = i.toString(16).padStart(2, "0");
-        }
-
-        bytesString = Array.from(bytes, (b) => hexTable[b]).join("");
-      }
-
-      const bytes = hexToBytes(bytesString);
+      const bytes = stringToBytes(type, raw, args.uiParams.encoding);
       if (!bytes) {
         return ActionFlags.Persist;
       }
-      const pos = args.buffer.search(address, bytes);
 
+      const pos = args.buffer.search(address, bytes);
       if (pos >= 0) {
         await searchAddress(args.denops, this.#offset, pos);
       } else {
@@ -711,20 +691,82 @@ export class Ui extends BaseUi<Params> {
 
       return ActionFlags.Redraw;
     },
-    quit: async (args: {
+    substitute: async (args: {
       denops: Denops;
       context: Context;
       options: DdxOptions;
+      buffer: DdxBuffer;
       uiParams: Params;
+      actionParams: BaseParams;
     }) => {
-      await this.quit({
-        denops: args.denops,
-        context: args.context,
-        options: args.options,
-        uiParams: args.uiParams,
-      });
+      const params = args.actionParams as TypeParams;
 
-      return ActionFlags.None;
+      // Get address
+      const address = await this.#getAddress(args.denops);
+      if (Number.isNaN(address)) {
+        await printError(
+          args.denops,
+          "Invalid address",
+        );
+        return ActionFlags.Persist;
+      }
+
+      const type = params.type ?? "hex";
+
+      const oldRaw = await args.denops.call(
+        "ddx#util#input",
+        type === "hex" ? "Search value: 0x" : "Search string: ",
+      ) as string;
+      if (oldRaw === "") {
+        return ActionFlags.Persist;
+      }
+
+      const oldBytes = stringToBytes(type, oldRaw, args.uiParams.encoding);
+      if (!oldBytes) {
+        return ActionFlags.Persist;
+      }
+
+      const newRaw = await args.denops.call(
+        "ddx#util#input",
+        type === "hex" ? "New value: 0x" : "New string: ",
+      ) as string;
+      if (newRaw === "") {
+        return ActionFlags.Persist;
+      }
+
+      const newBytes = stringToBytes(type, newRaw, args.uiParams.encoding);
+      if (!newBytes) {
+        return ActionFlags.Persist;
+      }
+
+      const isRange = this.#selectedStartAddress >= 0 &&
+        address !== this.#selectedStartAddress;
+      const rangeStart = isRange
+        ? Math.min(address, this.#selectedStartAddress)
+        : address;
+      const rangeLength = isRange
+        ? Math.abs(this.#selectedStartAddress - address) + 1
+        : args.buffer.getSize();
+
+      const cnt = args.buffer.substitute(
+        rangeStart,
+        rangeLength,
+        oldBytes,
+        newBytes,
+      );
+
+      this.#selectedStartAddress = -1;
+
+      if (cnt <= 0) {
+        await printError(
+          args.denops,
+          "Not found",
+        );
+
+        return ActionFlags.Persist;
+      }
+
+      return ActionFlags.Redraw;
     },
     undo: async (args: {
       denops: Denops;
@@ -949,20 +991,6 @@ async function searchAddress(
     row,
     col,
   );
-}
-
-// Parse hex string (e.g. "383838" -> [0x38, 0x38, 0x38])
-function hexToBytes(s: string): Uint8Array | null {
-  const clean = s.replace(/\s+/g, "");
-  if (clean.length === 0 || clean.length % 2 !== 0) return null;
-  const out = new Uint8Array(clean.length / 2);
-  for (let i = 0; i < out.length; i++) {
-    const byteStr = clean.slice(i * 2, i * 2 + 2);
-    const b = parseInt(byteStr, 16);
-    if (Number.isNaN(b) || b < 0 || b > 255) return null;
-    out[i] = b;
-  }
-  return out;
 }
 
 export async function renderBufferFast(
@@ -1213,4 +1241,44 @@ async function setStatusline(
       `${header.replaceAll("%", "%%")} %#LineNR#%{${linenr}}%*${footer}`,
     );
   }
+}
+
+function stringToBytes(
+  type: "string" | "hex",
+  raw: string,
+  encoding: Encoding,
+): Uint8Array | null {
+  let bytesString = raw;
+
+  if (type === "string") {
+    const bytes = stringToUint8Array(
+      raw,
+      undefined,
+      encoding,
+    );
+
+    // Fast hex conversion (lowercase)
+    const hexTable = new Array<string>(256);
+    for (let i = 0; i < 256; i++) {
+      hexTable[i] = i.toString(16).padStart(2, "0");
+    }
+
+    bytesString = Array.from(bytes, (b) => hexTable[b]).join("");
+  }
+
+  return hexToBytes(bytesString);
+}
+
+// Parse hex string (e.g. "383838" -> [0x38, 0x38, 0x38])
+function hexToBytes(s: string): Uint8Array | null {
+  const clean = s.replace(/\s+/g, "");
+  if (clean.length === 0 || clean.length % 2 !== 0) return null;
+  const out = new Uint8Array(clean.length / 2);
+  for (let i = 0; i < out.length; i++) {
+    const byteStr = clean.slice(i * 2, i * 2 + 2);
+    const b = parseInt(byteStr, 16);
+    if (Number.isNaN(b) || b < 0 || b > 255) return null;
+    out[i] = b;
+  }
+  return out;
 }

@@ -131,6 +131,16 @@ selectAddress
 		Select current address.
 		If it is already selected, it is unselected.
 
+                                                *ddx-ui-hex-action-substitute*
+substitute
+		Substitute the value from current address.
+
+		params:
+			{type}: Value type.
+
+				"hex": hexa decimal string (Default)
+				"string": string
+
                                                       *ddx-ui-hex-action-undo*
 undo
 		Undo the last change.
