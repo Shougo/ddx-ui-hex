@@ -160,6 +160,8 @@ export class Ui extends BaseUi<Params> {
 
     this.#buffers[args.options.name] = bufnr;
 
+    const prevAddress = await this.#getAddress(args.denops);
+
     const modified = await fn.getbufvar(args.denops, bufnr, "&modified");
     const size = args.buffer.getSize();
     if (size < this.#prevSize) {
@@ -181,6 +183,14 @@ export class Ui extends BaseUi<Params> {
       this.#selectedStartAddress,
       changedAdresses,
     );
+
+    if (!Number.isNaN(prevAddress)) {
+      await searchAddress(
+        args.denops,
+        this.#offset,
+        prevAddress,
+      );
+    }
 
     await fn.setbufvar(args.denops, bufnr, "&modified", modified);
 
