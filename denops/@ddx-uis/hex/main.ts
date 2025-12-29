@@ -594,7 +594,39 @@ export class Ui extends BaseUi<Params> {
     }) => {
       const params = args.actionParams as SaveParams;
 
-      await args.buffer.write(params.path ?? "");
+      const address = await this.#getAddress(args.denops);
+      if (Number.isNaN(address)) {
+        await printError(
+          args.denops,
+          "Invalid address",
+        );
+        return ActionFlags.Persist;
+      }
+
+      const isRange = this.#selectedStartAddress >= 0 &&
+        address !== this.#selectedStartAddress;
+      const path = params.path ?? "";
+      if (isRange) {
+        const rangeStart = Math.min(address, this.#selectedStartAddress);
+        const rangeLength = Math.abs(this.#selectedStartAddress - address) + 1;
+
+        if (path.length === 0) {
+          await printError(
+            args.denops,
+            "Save file path is required",
+          );
+
+          return ActionFlags.Persist;
+        }
+
+        const file = await Deno.open(path, { write: true, create: true });
+
+        await file.write(args.buffer.getBytes(rangeStart, rangeLength));
+
+        file.close();
+      } else {
+        await args.buffer.write(path);
+      }
 
       await args.denops.call(
         "ddx#util#print",

@@ -120,11 +120,12 @@ search
 
                                                       *ddx-ui-hex-action-save*
 save
+		Save current buffer to {path}.
+		If the address is selected, ranged bytes are saved.
+		If {path} is empty, the opened file path will be used.
+
 		params:
 			{path}: Save filename path.
-
-		Save current buffer to {path}.
-		If {path} is empty, the opened file path will be used.
 
                                              *ddx-ui-hex-action-selectAddress*
 selectAddress
