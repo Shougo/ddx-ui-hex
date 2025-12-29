@@ -558,17 +558,15 @@ export class Ui extends BaseUi<Params> {
         return ActionFlags.Persist;
       }
 
-      if (
-        this.#selectedStartAddress > 0 && address !== this.#selectedStartAddress
-      ) {
-        const start = Math.min(address, this.#selectedStartAddress);
-        const length = Math.abs(this.#selectedStartAddress - address);
-        if (length > 0) {
-          this.#savedBytes = args.buffer.remove(start, length);
-        }
-      } else {
-        this.#savedBytes = args.buffer.remove(address);
-      }
+      const isRange = this.#selectedStartAddress >= 0 &&
+        address !== this.#selectedStartAddress;
+      const rangeStart = isRange
+        ? Math.min(address, this.#selectedStartAddress)
+        : address;
+      const rangeLength = isRange
+        ? Math.abs(this.#selectedStartAddress - address) + 1
+        : 1;
+      this.#savedBytes = args.buffer.remove(rangeStart, rangeLength);
 
       const bufnr = this.#buffers[args.options.name];
       await fn.setbufvar(args.denops, bufnr, "&modified", true);
