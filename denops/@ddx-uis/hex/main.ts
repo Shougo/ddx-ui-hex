@@ -1231,6 +1231,8 @@ async function setStatusline(
 ): Promise<void> {
   const statusState = {
     name: options.name,
+    length: options.length,
+    offset: options.offset,
   };
   await fn.setwinvar(
     denops,
