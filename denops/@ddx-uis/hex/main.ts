@@ -609,6 +609,9 @@ export class Ui extends BaseUi<Params> {
       const isRange = this.#selectedStartAddress >= 0 &&
         address !== this.#selectedStartAddress;
       const path = params.path ?? "";
+      const abspath = isAbsolute(path)
+        ? path
+        : resolve(join(await fn.getcwd(args.denops), path));
       if (isRange) {
         const rangeStart = Math.min(address, this.#selectedStartAddress);
         const rangeLength = Math.abs(this.#selectedStartAddress - address) + 1;
@@ -622,21 +625,26 @@ export class Ui extends BaseUi<Params> {
           return ActionFlags.Persist;
         }
 
-        const abspath = isAbsolute(path)
-          ? path
-          : resolve(join(await fn.getcwd(args.denops), path));
         const file = await Deno.open(abspath, { write: true, create: true });
 
-        await file.write(args.buffer.getBytes(rangeStart, rangeLength));
+        try {
+          const bytes = args.buffer.getBytes(rangeStart, rangeLength);
 
-        file.close();
+          await file.write(bytes);
+
+          await file.truncate(bytes.length);
+        } finally {
+          file.close();
+        }
       } else {
         await args.buffer.write(path);
       }
 
       await args.denops.call(
         "ddx#util#print",
-        `Saved to "${params.path ?? args.buffer.getPath()}"`,
+        `Saved to "${
+          params.path ?? isRange ? abspath : args.buffer.getPath()
+        }"`,
       );
 
       const bufnr = this.#buffers[args.options.name];
