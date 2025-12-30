@@ -20,6 +20,9 @@ import * as fn from "@denops/std/function";
 import * as vars from "@denops/std/variable";
 import { batch } from "@denops/std/batch";
 import { crypto } from "@std/crypto";
+import { join } from "@std/path/join";
+import { resolve } from "@std/path/resolve";
+import { isAbsolute } from "@std/path/is-absolute";
 
 export type FloatingBorder =
   | "none"
@@ -619,7 +622,10 @@ export class Ui extends BaseUi<Params> {
           return ActionFlags.Persist;
         }
 
-        const file = await Deno.open(path, { write: true, create: true });
+        const abspath = isAbsolute(path)
+          ? path
+          : resolve(join(await fn.getcwd(args.denops), path));
+        const file = await Deno.open(abspath, { write: true, create: true });
 
         await file.write(args.buffer.getBytes(rangeStart, rangeLength));
 
