@@ -59,7 +59,7 @@ export type TypeParams = {
 };
 
 export type ChecksumParams = {
-  method?: "sum" | "md5";
+  method?: "sum" | "md5" | "crc32";
 };
 
 export type Params = {
@@ -381,13 +381,40 @@ export class Ui extends BaseUi<Params> {
           .join("");
       }
 
+      function calculateCRC32(data: number[]): string {
+        const table = new Uint32Array(256);
+
+        for (let i = 0; i < 256; i++) {
+          let c = i;
+          for (let j = 0; j < 8; j++) {
+            c = (c & 1) ? (0xEDB88320 ^ (c >>> 1)) : (c >>> 1);
+          }
+          table[i] = c;
+        }
+
+        const byteArray = new Uint8Array(data);
+
+        let crc = 0xFFFFFFFF;
+        for (const byte of byteArray) {
+          crc = table[(crc ^ byte) & 0xFF] ^ (crc >>> 8);
+        }
+
+        crc ^= 0xFFFFFFFF;
+
+        return (crc >>> 0).toString(16).padStart(8, "0").toUpperCase();
+      }
+
       const sum = params.method == "sum"
         ? calculateChecksum(Array.from(bytes))
-        : await calculateMD5(Array.from(bytes));
+        : params.method == "md5"
+        ? await calculateMD5(Array.from(bytes))
+        : params.method == "crc32"
+        ? calculateCRC32(Array.from(bytes))
+        : "Invalid method";
 
       await args.denops.call(
         "ddx#util#print",
-        `Checksum: "${sum}"`,
+        `Checksum ${params.method}: ${sum}`,
       );
 
       return ActionFlags.Persist;
