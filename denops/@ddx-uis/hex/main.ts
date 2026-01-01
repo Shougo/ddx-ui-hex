@@ -153,12 +153,14 @@ export class Ui extends BaseUi<Params> {
       await this.#initOptions(args.denops, args.options, args.uiParams, bufnr);
     }
 
+    const size = args.buffer.getSize();
     await setStatusline(
       args.denops,
       args.options,
       args.uiParams,
       await fn.bufwinid(args.denops, bufnr),
       `ddx-ui-hex-${bufnr}`,
+      size,
     );
 
     this.#buffers[args.options.name] = bufnr;
@@ -166,7 +168,6 @@ export class Ui extends BaseUi<Params> {
     const prevAddress = await this.#getAddress(args.denops);
 
     const modified = await fn.getbufvar(args.denops, bufnr, "&modified");
-    const size = args.buffer.getSize();
     if (size < this.#prevSize) {
       // Clear previous buffer
       await fn.deletebufline(args.denops, bufnr, 1, "$");
@@ -1241,11 +1242,13 @@ async function setStatusline(
   uiParams: Params,
   winid: number,
   augroupName: string,
+  size: number,
 ): Promise<void> {
   const statusState = {
     name: options.name,
-    length: options.length,
     offset: options.offset,
+    length: options.length,
+    size,
   };
   await fn.setwinvar(
     denops,
@@ -1257,10 +1260,12 @@ async function setStatusline(
   const header = `[ddx-${options.name}]%m `;
 
   const linenr = [
-    "printf('%'.(('$'->line())->len()+2).'d/%d 0x%08x',",
+    "printf('%'.(('$'->line())->len()+2).'d/%d 0x%08x/0x%08x',",
     "'.'->line(),",
-    "'$'->line(), ",
-    "ddx#ui#hex#_get_current_address()[1])",
+    "'$'->line(),",
+    "ddx#ui#hex#_get_current_address()[1],",
+    "w:ddx_ui_hex_status.offset + w:ddx_ui_hex_status.size - 1",
+    ")",
   ].join("");
   const laststatus = await op.laststatus.getGlobal(denops);
 
