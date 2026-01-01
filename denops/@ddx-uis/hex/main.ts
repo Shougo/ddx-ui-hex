@@ -59,7 +59,7 @@ export type TypeParams = {
 };
 
 export type ChecksumParams = {
-  method?: "sum" | "md5" | "crc32";
+  method?: "sum" | "md5" | "sha-1" | "sha-256" | "crc-8" | "crc-16" | "crc-32";
 };
 
 export type Params = {
@@ -363,52 +363,24 @@ export class Ui extends BaseUi<Params> {
 
       const bytes = args.buffer.getBytes(rangeStart, rangeLength);
 
-      function calculateChecksum(data: number[]): number {
-        let sum = 0;
-        for (const byte of data) {
-          sum += byte;
-        }
-        return sum & 0xff;
-      }
+      const methodMap = {
+        "md5": "MD5",
+        "sha-1": "SHA-1",
+        "sha-256": "SHA-256",
+      } as const;
 
-      async function calculateMD5(data: number[]): Promise<string> {
-        const byteArray = new Uint8Array(data);
-
-        const hashBuffer = await crypto.subtle.digest("MD5", byteArray);
-
-        return Array.from(new Uint8Array(hashBuffer))
-          .map((b) => b.toString(16).padStart(2, "0"))
-          .join("");
-      }
-
-      function calculateCRC32(data: number[]): string {
-        const table = new Uint32Array(256);
-
-        for (let i = 0; i < 256; i++) {
-          let c = i;
-          for (let j = 0; j < 8; j++) {
-            c = (c & 1) ? (0xEDB88320 ^ (c >>> 1)) : (c >>> 1);
-          }
-          table[i] = c;
-        }
-
-        const byteArray = new Uint8Array(data);
-
-        let crc = 0xFFFFFFFF;
-        for (const byte of byteArray) {
-          crc = table[(crc ^ byte) & 0xFF] ^ (crc >>> 8);
-        }
-
-        crc ^= 0xFFFFFFFF;
-
-        return (crc >>> 0).toString(16).padStart(8, "0").toUpperCase();
-      }
-
-      const sum = params.method == "sum"
+      const sum = params.method === "sum"
         ? calculateChecksum(Array.from(bytes))
-        : params.method == "md5"
-        ? await calculateMD5(Array.from(bytes))
-        : params.method == "crc32"
+        : params.method && params.method in methodMap
+        ? await calculateHash(
+          Array.from(bytes),
+          methodMap[params.method as keyof typeof methodMap],
+        )
+        : params.method === "crc-8"
+        ? calculateCRC8(Array.from(bytes))
+        : params.method === "crc-16"
+        ? calculateCRC16(Array.from(bytes))
+        : params.method === "crc-32"
         ? calculateCRC32(Array.from(bytes))
         : "Invalid method";
 
@@ -1364,4 +1336,86 @@ function hexToBytes(s: string): Uint8Array | null {
     out[i] = b;
   }
   return out;
+}
+
+function calculateChecksum(data: number[]): number {
+  let sum = 0;
+  for (const byte of data) {
+    sum += byte;
+  }
+  return sum & 0xff;
+}
+
+function calculateCRC32(data: number[]): string {
+  const table = new Uint32Array(256);
+
+  for (let i = 0; i < 256; i++) {
+    let c = i;
+    for (let j = 0; j < 8; j++) {
+      c = (c & 1) ? (0xedb88320 ^ (c >>> 1)) : (c >>> 1);
+    }
+    table[i] = c;
+  }
+
+  const byteArray = new Uint8Array(data);
+
+  let crc = 0xffffffff;
+  for (const byte of byteArray) {
+    crc = table[(crc ^ byte) & 0xff] ^ (crc >>> 8);
+  }
+
+  crc ^= 0xffffffff;
+
+  return (crc >>> 0).toString(16).padStart(8, "0").toUpperCase();
+}
+
+function calculateCRC16(data: number[]): string {
+  const POLYNOMIAL = 0x1021;
+  let crc = 0xffff;
+
+  const byteArray = new Uint8Array(data);
+
+  for (const byte of byteArray) {
+    crc ^= byte << 8;
+    for (let j = 0; j < 8; j++) {
+      if (crc & 0x8000) {
+        crc = (crc << 1) ^ POLYNOMIAL;
+      } else {
+        crc <<= 1;
+      }
+    }
+    crc &= 0xffff;
+  }
+
+  return crc.toString(16).padStart(4, "0").toUpperCase();
+}
+
+function calculateCRC8(data: number[]): string {
+  const POLYNOMIAL = 0x07;
+  let crc = 0x00;
+
+  const byteArray = new Uint8Array(data);
+
+  for (const byte of byteArray) {
+    crc ^= byte;
+    for (let j = 0; j < 8; j++) {
+      crc = (crc & 0x80) ? ((crc << 1) ^ POLYNOMIAL) : (crc << 1);
+    }
+    crc &= 0xff;
+  }
+
+  return crc.toString(16).padStart(2, "0").toUpperCase();
+}
+
+async function calculateHash(
+  data: number[],
+  algorithm: "MD5" | "SHA-1" | "SHA-256",
+): Promise<string> {
+  const byteArray = new Uint8Array(data);
+
+  const hashBuffer = await crypto.subtle.digest(algorithm, byteArray);
+
+  return Array.from(new Uint8Array(hashBuffer))
+    .map((b) => b.toString(16).padStart(2, "0"))
+    .join("");
 }

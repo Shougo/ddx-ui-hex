@@ -70,7 +70,11 @@ checksum
 
 				"sum": Simple sum (Default)
 				"md5": MD5
-				"crc32": CRC32
+				"sha-1": SHA-1
+				"sha-256": SHA-256
+				"crc-8": CRC-8
+				"crc-16": CRC-16
+				"crc-32": CRC-32
 
                                                       *ddx-ui-hex-action-copy*
 copy
