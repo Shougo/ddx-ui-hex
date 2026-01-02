@@ -594,6 +594,50 @@ export class Ui extends BaseUi<Params> {
 
       return ActionFlags.Redraw;
     },
+    resize: async (args: {
+      denops: Denops;
+      context: Context;
+      options: DdxOptions;
+      buffer: DdxBuffer;
+      uiParams: Params;
+      actionParams: BaseParams;
+    }) => {
+      // Get address
+      const address = await this.#getAddress(args.denops);
+      if (Number.isNaN(address)) {
+        await printError(
+          args.denops,
+          "Invalid address",
+        );
+        return ActionFlags.Persist;
+      }
+
+      const input = await args.denops.call(
+        "ddx#util#input",
+        "Resize length: ",
+        args.buffer.getSize(),
+      ) as string;
+      if (input === "") {
+        return ActionFlags.Persist;
+      }
+
+      const length = Number(input);
+
+      if (isNaN(length) || length <= 0) {
+        await printError(
+          args.denops,
+          "Invalid value",
+        );
+        return ActionFlags.Persist;
+      }
+
+      args.buffer.resize(length);
+
+      const bufnr = this.#buffers[args.options.name];
+      await fn.setbufvar(args.denops, bufnr, "&modified", true);
+
+      return ActionFlags.Redraw;
+    },
     save: async (args: {
       denops: Denops;
       context: Context;
