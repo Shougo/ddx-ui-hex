@@ -312,15 +312,21 @@ export class Ui extends BaseUi<Params> {
         ? Math.abs(this.#selectedStartAddress - address) + 1
         : 1;
 
-      if (bytes.length !== rangeLength) {
+      if (bytes.length === 1) {
+        // Replace range by "bytes".
+        args.buffer.changeBytes(
+          rangeStart,
+          new Uint8Array(rangeLength).fill(bytes[0]),
+        );
+      } else if (bytes.length !== rangeLength) {
         await printError(
           args.denops,
           `Length mismatch (expected ${rangeLength} bytes in hex).`,
         );
         return ActionFlags.Persist;
+      } else {
+        args.buffer.changeBytes(rangeStart, bytes);
       }
-
-      args.buffer.changeBytes(rangeStart, bytes);
 
       const bufnr = this.#buffers[args.options.name];
       await fn.setbufvar(args.denops, bufnr, "&modified", true);
