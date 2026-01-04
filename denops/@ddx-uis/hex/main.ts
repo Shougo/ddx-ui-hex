@@ -455,7 +455,7 @@ export class Ui extends BaseUi<Params> {
 
       const raw = await args.denops.call(
         "ddx#util#input",
-        "New value: ",
+        type === "hex" ? "New value: 0x" : "New string: ",
       ) as string;
       if (raw == "") {
         return ActionFlags.Persist;
@@ -1159,6 +1159,10 @@ export async function renderBufferFast(
           break;
       }
     });
+  }
+
+  if (size === 0) {
+    lines.push(`${start.toString(16).padStart(8, "0").slice(-8)}: `);
   }
 
   while (start < size) {
