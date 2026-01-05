@@ -1318,7 +1318,8 @@ async function setStatusline(
     "'.'->line(),",
     "'$'->line(),",
     "ddx#ui#hex#_get_current_address()[1],",
-    "w:ddx_ui_hex_status.offset + w:ddx_ui_hex_status.size - 1",
+    "'w:ddx_ui_hex_status'->exists() && w:ddx_ui_hex_status.size > 1 ? " +
+      "w:ddx_ui_hex_status.offset + w:ddx_ui_hex_status.size - 1 : 0",
     ")",
   ].join("");
   const laststatus = await op.laststatus.getGlobal(denops);
