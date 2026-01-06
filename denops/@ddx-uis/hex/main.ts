@@ -318,7 +318,7 @@ export class Ui extends BaseUi<Params> {
           rangeStart,
           new Uint8Array(rangeLength).fill(bytes[0]),
         );
-      } else if (bytes.length !== rangeLength) {
+      } else if (isRange && bytes.length !== rangeLength) {
         await printError(
           args.denops,
           `Length mismatch (expected ${rangeLength} bytes in hex).`,
