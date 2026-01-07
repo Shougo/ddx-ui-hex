@@ -477,6 +477,42 @@ export class Ui extends BaseUi<Params> {
 
       return ActionFlags.Redraw;
     },
+    inspect: async (args: {
+      denops: Denops;
+      context: Context;
+      options: DdxOptions;
+      buffer: DdxBuffer;
+      uiParams: Params;
+      actionParams: BaseParams;
+    }) => {
+      // Get address
+      const address = await this.#getAddress(args.denops);
+      if (Number.isNaN(address)) {
+        await printError(
+          args.denops,
+          "Invalid address",
+        );
+        return ActionFlags.Persist;
+      }
+
+      const isRange = this.#selectedStartAddress >= 0 &&
+        address !== this.#selectedStartAddress;
+      const rangeStart = isRange
+        ? Math.min(address, this.#selectedStartAddress)
+        : address;
+      const rangeLength = isRange
+        ? Math.abs(this.#selectedStartAddress - address) + 1
+        : 1;
+
+      const bytes = args.buffer.getBytes(rangeStart, rangeLength);
+
+      await args.denops.call(
+        "ddx#util#print",
+        `Bytes: "${bytes}"`,
+      );
+
+      return ActionFlags.Persist;
+    },
     nextDiff: async (args: {
       denops: Denops;
       context: Context;
