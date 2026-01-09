@@ -10,6 +10,7 @@ import {
 import { BaseUi, type UiActions } from "@shougo/ddx-vim/ui";
 import {
   calculateBinaryDiff,
+  numberToUint8Array,
   printError,
   stringToUint8Array,
 } from "@shougo/ddx-vim/utils";
@@ -57,15 +58,13 @@ export type SaveParams = {
 export type InputType =
   | "hex"
   | "string"
-  | "int8"
-  | "int16"
-  | "int32"
-  | "int64";
+  | "number";
 
 export type TypeParams = {
   type?: InputType;
   isLittle?: boolean;
   isSigned?: boolean;
+  size?: number;
 };
 
 export type ChecksumParams = {
@@ -301,7 +300,14 @@ export class Ui extends BaseUi<Params> {
         return ActionFlags.Persist;
       }
 
-      const bytes = stringToBytes(type, raw, args.uiParams.encoding);
+      const bytes = stringToBytes(
+        type,
+        raw,
+        args.uiParams.encoding,
+        params.isLittle,
+        params.isSigned,
+        params.size,
+      );
       if (bytes === null) {
         await printError(
           args.denops,
@@ -465,7 +471,14 @@ export class Ui extends BaseUi<Params> {
         return ActionFlags.Persist;
       }
 
-      const bytes = stringToBytes(type, raw, args.uiParams.encoding);
+      const bytes = stringToBytes(
+        type,
+        raw,
+        args.uiParams.encoding,
+        params.isLittle,
+        params.isSigned,
+        params.size,
+      );
       if (bytes === null) {
         await printError(
           args.denops,
@@ -788,7 +801,14 @@ export class Ui extends BaseUi<Params> {
         return ActionFlags.Persist;
       }
 
-      const bytes = stringToBytes(type, raw, args.uiParams.encoding);
+      const bytes = stringToBytes(
+        type,
+        raw,
+        args.uiParams.encoding,
+        params.isLittle,
+        params.isSigned,
+        params.size,
+      );
       if (!bytes) {
         return ActionFlags.Persist;
       }
@@ -859,7 +879,14 @@ export class Ui extends BaseUi<Params> {
         return ActionFlags.Persist;
       }
 
-      const oldBytes = stringToBytes(type, oldRaw, args.uiParams.encoding);
+      const oldBytes = stringToBytes(
+        type,
+        oldRaw,
+        args.uiParams.encoding,
+        params.isLittle,
+        params.isSigned,
+        params.size,
+      );
       if (!oldBytes) {
         return ActionFlags.Persist;
       }
@@ -869,7 +896,14 @@ export class Ui extends BaseUi<Params> {
         return ActionFlags.Persist;
       }
 
-      const newBytes = stringToBytes(type, newRaw, args.uiParams.encoding);
+      const newBytes = stringToBytes(
+        type,
+        newRaw,
+        args.uiParams.encoding,
+        params.isLittle,
+        params.isSigned,
+        params.size,
+      );
       if (!newBytes) {
         return ActionFlags.Persist;
       }
@@ -1414,7 +1448,16 @@ function stringToBytes(
   type: InputType,
   raw: string,
   encoding: Encoding,
+  isLittle: boolean | undefined,
+  isSigned: boolean | undefined,
+  size: number | undefined,
 ): Uint8Array | null {
+  // Fast hex conversion (lowercase)
+  const hexTable = new Array<string>(256);
+  for (let i = 0; i < 256; i++) {
+    hexTable[i] = i.toString(16).padStart(2, "0");
+  }
+
   let bytesString = raw;
 
   if (type === "string") {
@@ -1424,11 +1467,14 @@ function stringToBytes(
       encoding,
     );
 
-    // Fast hex conversion (lowercase)
-    const hexTable = new Array<string>(256);
-    for (let i = 0; i < 256; i++) {
-      hexTable[i] = i.toString(16).padStart(2, "0");
-    }
+    bytesString = Array.from(bytes, (b) => hexTable[b]).join("");
+  } else if (type === "number") {
+    const bytes = numberToUint8Array(
+      Number(raw),
+      size ?? 4,
+      isLittle ?? true,
+      isSigned ?? false,
+    );
 
     bytesString = Array.from(bytes, (b) => hexTable[b]).join("");
   }

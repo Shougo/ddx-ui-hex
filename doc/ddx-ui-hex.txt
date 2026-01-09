@@ -59,6 +59,16 @@ change
 
 				"hex": hexa decimal string (Default)
 				"string": string
+				"number": number
+
+			{isLittle}: is little endian.
+				Default is little endian.
+
+			{isSigned}: is signed bytes.
+				Default is unsigned.
+
+			{size}: value size.
+				It is only used for "number".
 
                                                   *ddx-ui-hex-action-checksum*
 checksum
@@ -85,11 +95,7 @@ copy
 insert
 		Insert the value in current address.
 
-		params:
-			{type}: Value type.
-
-				"hex": hexa decimal string (Default)
-				"string": string
+		params: See |ddx-ui-hex-action-change|.
 
                                                    *ddx-ui-hex-action-inspect*
 inspect
@@ -125,11 +131,7 @@ resize
 search
 		Search the value from current address.
 
-		params:
-			{type}: Value type.
-
-				"hex": hexa decimal string (Default)
-				"string": string
+		params: See |ddx-ui-hex-action-change|.
 
                                                       *ddx-ui-hex-action-save*
 save
@@ -149,11 +151,7 @@ selectAddress
 substitute
 		Substitute the value from current address.
 
-		params:
-			{type}: Value type.
-
-				"hex": hexa decimal string (Default)
-				"string": string
+		params: See |ddx-ui-hex-action-change|.
 
                                                       *ddx-ui-hex-action-undo*
 undo
@@ -163,11 +161,7 @@ undo
 yank
 		Yank the value in current address.
 
-		params:
-			{type}: Value type.
-
-				"hex": hexa decimal string (Default)
-				"string": string
+		params: See |ddx-ui-hex-action-change|.
 
 ==============================================================================
 PARAMS                                                     *ddx-ui-hex-params*
