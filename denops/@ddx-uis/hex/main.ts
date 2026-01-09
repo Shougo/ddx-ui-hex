@@ -54,8 +54,18 @@ export type SaveParams = {
   path?: string;
 };
 
+export type InputType =
+  | "hex"
+  | "string"
+  | "int8"
+  | "int16"
+  | "int32"
+  | "int64";
+
 export type TypeParams = {
-  type?: "hex" | "string";
+  type?: InputType;
+  isLittle?: boolean;
+  isSigned?: boolean;
 };
 
 export type ChecksumParams = {
@@ -286,10 +296,7 @@ export class Ui extends BaseUi<Params> {
 
       const type = params.type ?? "hex";
 
-      const raw = await args.denops.call(
-        "ddx#util#input",
-        type === "hex" ? "New value: 0x" : "New string: ",
-      ) as string;
+      const raw = await InputRawString(args.denops, type, "New");
       if (raw === "") {
         return ActionFlags.Persist;
       }
@@ -453,10 +460,7 @@ export class Ui extends BaseUi<Params> {
 
       const type = params.type ?? "hex";
 
-      const raw = await args.denops.call(
-        "ddx#util#input",
-        type === "hex" ? "New value: 0x" : "New string: ",
-      ) as string;
+      const raw = await InputRawString(args.denops, type, "New");
       if (raw == "") {
         return ActionFlags.Persist;
       }
@@ -779,10 +783,7 @@ export class Ui extends BaseUi<Params> {
 
       const type = params.type ?? "hex";
 
-      const raw = await args.denops.call(
-        "ddx#util#input",
-        type === "hex" ? "Search value: 0x" : "Search string: ",
-      ) as string;
+      const raw = await InputRawString(args.denops, type, "Search");
       if (raw === "") {
         return ActionFlags.Persist;
       }
@@ -853,10 +854,7 @@ export class Ui extends BaseUi<Params> {
 
       const type = params.type ?? "hex";
 
-      const oldRaw = await args.denops.call(
-        "ddx#util#input",
-        type === "hex" ? "Search value: 0x" : "Search string: ",
-      ) as string;
+      const oldRaw = await InputRawString(args.denops, type, "Search");
       if (oldRaw === "") {
         return ActionFlags.Persist;
       }
@@ -866,10 +864,7 @@ export class Ui extends BaseUi<Params> {
         return ActionFlags.Persist;
       }
 
-      const newRaw = await args.denops.call(
-        "ddx#util#input",
-        type === "hex" ? "New value: 0x" : "New string: ",
-      ) as string;
+      const newRaw = await InputRawString(args.denops, type, "New");
       if (newRaw === "") {
         return ActionFlags.Persist;
       }
@@ -1355,7 +1350,7 @@ async function setStatusline(
     "'$'->line(),",
     "ddx#ui#hex#_get_current_address()[1],",
     "'w:ddx_ui_hex_status'->exists() && w:ddx_ui_hex_status.size > 1 ? " +
-      "w:ddx_ui_hex_status.offset + w:ddx_ui_hex_status.size - 1 : 0",
+    "w:ddx_ui_hex_status.offset + w:ddx_ui_hex_status.size - 1 : 0",
     ")",
   ].join("");
   const laststatus = await op.laststatus.getGlobal(denops);
@@ -1394,8 +1389,29 @@ async function setStatusline(
   }
 }
 
+async function InputRawString(
+  denops: Denops,
+  type: InputType,
+  prefix: string,
+): Promise<string> {
+  const prompt = type === "hex"
+    ? " value: 0x"
+    : type === "string"
+    ? " string: "
+    : " number: ";
+
+  const input = await denops.call("ddx#util#input", prefix + prompt) as string;
+
+  if (input.startsWith("int") && Number.isNaN(Number(input))) {
+    // Invalid number
+    return "";
+  }
+
+  return input;
+}
+
 function stringToBytes(
-  type: "string" | "hex",
+  type: InputType,
   raw: string,
   encoding: Encoding,
 ): Uint8Array | null {
