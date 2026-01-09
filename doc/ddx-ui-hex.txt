@@ -61,14 +61,18 @@ change
 				"string": string
 				"number": number
 
-			{isLittle}: is little endian.
+			{isLittle}: Is little endian.
+
 				Default is little endian.
 
-			{isSigned}: is signed bytes.
+			{isSigned}: Is signed bytes.
+
 				Default is unsigned.
 
-			{size}: value size.
+			{size}: Value size.
+
 				It is only used for "number".
+				Default is 4 byte.
 
                                                   *ddx-ui-hex-action-checksum*
 checksum
