@@ -502,6 +502,8 @@ export class Ui extends BaseUi<Params> {
       uiParams: Params;
       actionParams: BaseParams;
     }) => {
+      const params = args.actionParams as TypeParams;
+
       // Get address
       const address = await this.#getAddress(args.denops);
       if (Number.isNaN(address)) {
@@ -521,12 +523,29 @@ export class Ui extends BaseUi<Params> {
         ? Math.abs(this.#selectedStartAddress - address) + 1
         : 1;
 
-      const bytes = args.buffer.getBytes(rangeStart, rangeLength);
+      if (params.type === "string") {
+        await args.denops.call(
+          "ddx#util#print",
+          `Chars: "${args.buffer.getChars(rangeStart, rangeLength)}"`,
+        );
+      } else if (params.type === "number") {
+        const number = args.buffer.getInt(
+          rangeStart,
+          params.size ?? 4,
+          params.isLittle ?? true,
+          params.isSigned ?? false,
+        );
 
-      await args.denops.call(
-        "ddx#util#print",
-        `Bytes: "${bytes}"`,
-      );
+        await args.denops.call(
+          "ddx#util#print",
+          `Number: "${number}"`,
+        );
+      } else {
+        await args.denops.call(
+          "ddx#util#print",
+          `Bytes: "${args.buffer.getBytes(rangeStart, rangeLength)}"`,
+        );
+      }
 
       return ActionFlags.Persist;
     },
