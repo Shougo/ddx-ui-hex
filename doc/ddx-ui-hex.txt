@@ -60,6 +60,7 @@ change
 				"hex": hexa decimal string (Default)
 				"string": string
 				"number": number
+				"floating": floating
 
 			{isLittle}: Is little endian.
 

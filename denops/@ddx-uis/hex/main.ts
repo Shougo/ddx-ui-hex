@@ -58,7 +58,8 @@ export type SaveParams = {
 export type InputType =
   | "hex"
   | "string"
-  | "number";
+  | "number"
+  | "floating";
 
 export type TypeParams = {
   type?: InputType;
@@ -539,6 +540,18 @@ export class Ui extends BaseUi<Params> {
         await args.denops.call(
           "ddx#util#print",
           `Number: "${number}"`,
+        );
+      } else if (params.type === "floating") {
+        const float = args.buffer.getFloat(
+          rangeStart,
+          params.size ?? 4,
+          params.isLittle ?? true,
+          params.isSigned ?? false,
+        );
+
+        await args.denops.call(
+          "ddx#util#print",
+          `Float: "${float}"`,
         );
       } else {
         await args.denops.call(
@@ -1451,13 +1464,24 @@ async function InputRawString(
     ? " value: 0x"
     : type === "string"
     ? " string: "
-    : " number: ";
+    : type === "number"
+    ? " number: "
+    : " floating: ";
 
   const input = await denops.call("ddx#util#input", prefix + prompt) as string;
 
-  if (input.startsWith("int") && Number.isNaN(Number(input))) {
-    // Invalid number
-    return "";
+  if (type === "number" || type === "floating") {
+    if (Number.isNaN(Number(input))) {
+      return "";
+    }
+
+    if (type === "number" && !Number.isInteger(Number(input))) {
+      return "";
+    }
+
+    if (type === "floating" && Number.isInteger(Number(input))) {
+      return "";
+    }
   }
 
   return input;
@@ -1487,7 +1511,7 @@ function stringToBytes(
     );
 
     bytesString = Array.from(bytes, (b) => hexTable[b]).join("");
-  } else if (type === "number") {
+  } else if (type === "number" || type === "floating") {
     const bytes = numberToUint8Array(
       Number(raw),
       size ?? 4,
