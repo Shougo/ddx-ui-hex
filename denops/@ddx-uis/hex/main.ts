@@ -579,15 +579,43 @@ export class Ui extends BaseUi<Params> {
         return ActionFlags.Persist;
       }
 
-      if (!/^0x[0-9a-fA-F]+$/.test(input)) {
+      let address: number;
+
+      if (/^0x[0-9a-fA-F]+$/.test(input)) {
+        // Hex
+        address = parseInt(input.slice(2), 16);
+      } else if (/%$/.test(input)) {
+        // Percentage
+        const percentage = parseFloat(input.slice(0, -1));
+        if (isNaN(percentage) || percentage < 0 || percentage > 100) {
+          await printError(
+            args.denops,
+            "Invalid percentage",
+          );
+          return ActionFlags.Persist;
+        }
+
+        const bufferSize = await args.buffer.getSize();
+        address = Math.floor(bufferSize * (percentage / 100));
+      } else if (/^[+-]\d+$/.test(input)) {
+        // Offset
+        const offset = parseInt(input, 10);
+        const currentAddress = await this.#getAddress(args.denops);
+        if (Number.isNaN(currentAddress)) {
+          await printError(
+            args.denops,
+            "Invalid address",
+          );
+          return ActionFlags.Persist;
+        }
+        address = currentAddress + offset;
+      } else {
         await printError(
           args.denops,
           "Invalid input",
         );
         return ActionFlags.Persist;
       }
-
-      const address = parseInt(input.slice(2), 16);
 
       await args.denops.call(
         "ddx#jump",

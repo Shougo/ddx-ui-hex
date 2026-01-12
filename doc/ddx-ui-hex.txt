@@ -110,6 +110,10 @@ inspect
 jump
 		Jump to the input address.
 
+		"0x{address}": Absolute address
+		"{percentage}%": Filesize percentage address
+		"+{offset}", "-{offset}": Offset from current address
+
                                                   *ddx-ui-hex-action-nextDiff*
 nextDiff
 		Search the changed address from current address.
