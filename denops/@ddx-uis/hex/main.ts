@@ -562,6 +562,41 @@ export class Ui extends BaseUi<Params> {
 
       return ActionFlags.Persist;
     },
+    jump: async (args: {
+      denops: Denops;
+      context: Context;
+      options: DdxOptions;
+      buffer: DdxBuffer;
+      uiParams: Params;
+      actionParams: BaseParams;
+    }) => {
+      const input = await args.denops.call(
+        "ddx#util#input",
+        "Jump to the address: ",
+        "0x",
+      ) as string;
+      if (input === "") {
+        return ActionFlags.Persist;
+      }
+
+      if (!/^0x[0-9a-fA-F]+$/.test(input)) {
+        await printError(
+          args.denops,
+          "Invalid input",
+        );
+        return ActionFlags.Persist;
+      }
+
+      const address = parseInt(input.slice(2), 16);
+
+      await args.denops.call(
+        "ddx#jump",
+        args.options.name,
+        address,
+      );
+
+      return ActionFlags.Persist;
+    },
     nextDiff: async (args: {
       denops: Denops;
       context: Context;
