@@ -132,12 +132,6 @@ resize
 		Resize the file size.
 		NOTE: You cannot undo the operation.
 
-                                                    *ddx-ui-hex-action-search*
-search
-		Search the value from current address.
-
-		params: See |ddx-ui-hex-action-change|.
-
                                                       *ddx-ui-hex-action-save*
 save
 		Save current buffer to {path}.
@@ -146,6 +140,12 @@ save
 
 		params:
 			{path}: Save filename path.
+
+                                                    *ddx-ui-hex-action-search*
+search
+		Search the value from current address.
+
+		params: See |ddx-ui-hex-action-change|.
 
                                              *ddx-ui-hex-action-selectAddress*
 selectAddress
