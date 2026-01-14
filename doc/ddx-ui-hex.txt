@@ -118,6 +118,10 @@ jump
 nextDiff
 		Search the changed address from current address.
 
+                                                *ddx-ui-hex-action-nextSearch*
+nextSearch
+		Search the previous searched value from current address.
+
                                                      *ddx-ui-hex-action-paste*
 paste
 		Paste previous removed values.

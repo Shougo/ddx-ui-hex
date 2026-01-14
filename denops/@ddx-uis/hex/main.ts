@@ -93,6 +93,7 @@ export class Ui extends BaseUi<Params> {
   #selectedStartAddress: number = -1;
   #prevSize: number = 0;
   #savedBytes: Uint8Array = Uint8Array.from([]);
+  #prevSearchBytes: Uint8Array | null = null;
 
   override async redraw(args: {
     denops: Denops;
@@ -669,6 +670,40 @@ export class Ui extends BaseUi<Params> {
 
       return ActionFlags.Persist;
     },
+    nextSearch: async (args: {
+      denops: Denops;
+      context: Context;
+      options: DdxOptions;
+      buffer: DdxBuffer;
+      uiParams: Params;
+      actionParams: BaseParams;
+    }) => {
+      // Get address
+      const address = await this.#getAddress(args.denops);
+      if (Number.isNaN(address)) {
+        await printError(
+          args.denops,
+          "Invalid address",
+        );
+        return ActionFlags.Persist;
+      }
+
+      if (!this.#prevSearchBytes) {
+        return ActionFlags.Persist;
+      }
+
+      const pos = args.buffer.search(address + 1, this.#prevSearchBytes);
+      if (pos >= 0) {
+        await searchAddress(args.denops, this.#offset, pos);
+      } else {
+        await printError(
+          args.denops,
+          "Not found",
+        );
+      }
+
+      return ActionFlags.Persist;
+    },
     paste: async (args: {
       denops: Denops;
       context: Context;
@@ -786,6 +821,25 @@ export class Ui extends BaseUi<Params> {
 
       return ActionFlags.Redraw;
     },
+    redo: async (args: {
+      denops: Denops;
+      context: Context;
+      options: DdxOptions;
+      buffer: DdxBuffer;
+      uiParams: Params;
+    }) => {
+      args.buffer.redo();
+
+      const bufnr = this.#buffers[args.options.name];
+      await fn.setbufvar(
+        args.denops,
+        bufnr,
+        "&modified",
+        true,
+      );
+
+      return ActionFlags.Redraw;
+    },
     save: async (args: {
       denops: Denops;
       context: Context;
@@ -850,25 +904,6 @@ export class Ui extends BaseUi<Params> {
 
       return ActionFlags.Persist;
     },
-    redo: async (args: {
-      denops: Denops;
-      context: Context;
-      options: DdxOptions;
-      buffer: DdxBuffer;
-      uiParams: Params;
-    }) => {
-      args.buffer.redo();
-
-      const bufnr = this.#buffers[args.options.name];
-      await fn.setbufvar(
-        args.denops,
-        bufnr,
-        "&modified",
-        true,
-      );
-
-      return ActionFlags.Redraw;
-    },
     search: async (args: {
       denops: Denops;
       context: Context;
@@ -907,6 +942,8 @@ export class Ui extends BaseUi<Params> {
       if (!bytes) {
         return ActionFlags.Persist;
       }
+
+      this.#prevSearchBytes = bytes;
 
       const pos = args.buffer.search(address, bytes);
       if (pos >= 0) {
