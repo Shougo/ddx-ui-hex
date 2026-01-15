@@ -122,6 +122,12 @@ nextDiff
 nextSearch
 		Search the previous searched value from current address.
 
+		params:
+			{direction}: Search direction.
+
+				"forward": Search forward.
+				"backward" Search backward.
+
                                                      *ddx-ui-hex-action-paste*
 paste
 		Paste previous removed values.
@@ -159,6 +165,11 @@ search
 		Search the value from current address.
 
 		params: See |ddx-ui-hex-action-change|.
+
+			{direction}: Search direction.
+
+				"forward": Search forward.
+				"backward" Search backward.
 
                                              *ddx-ui-hex-action-selectAddress*
 selectAddress

@@ -68,6 +68,12 @@ export type TypeParams = {
   size?: number;
 };
 
+export type SearchTypeParams = TypeParams & SearchParams;
+
+export type SearchParams = {
+  direction?: "forward" | "backward";
+};
+
 export type ChecksumParams = {
   method?: "sum" | "md5" | "sha-1" | "sha-256" | "crc-8" | "crc-16" | "crc-32";
 };
@@ -678,6 +684,8 @@ export class Ui extends BaseUi<Params> {
       uiParams: Params;
       actionParams: BaseParams;
     }) => {
+      const params = args.actionParams as SearchParams;
+
       // Get address
       const address = await this.#getAddress(args.denops);
       if (Number.isNaN(address)) {
@@ -692,7 +700,12 @@ export class Ui extends BaseUi<Params> {
         return ActionFlags.Persist;
       }
 
-      const pos = args.buffer.search(address + 1, this.#prevSearchBytes);
+      const direction = params.direction ?? "forward";
+      const pos = args.buffer.search(
+        direction == "forward" ? address + 1 : address - 1,
+        this.#prevSearchBytes,
+        direction,
+      );
       if (pos >= 0) {
         await searchAddress(args.denops, this.#offset, pos);
       } else {
@@ -912,7 +925,7 @@ export class Ui extends BaseUi<Params> {
       uiParams: Params;
       actionParams: BaseParams;
     }) => {
-      const params = args.actionParams as TypeParams;
+      const params = args.actionParams as SearchTypeParams;
 
       // Get address
       const address = await this.#getAddress(args.denops);
@@ -945,7 +958,12 @@ export class Ui extends BaseUi<Params> {
 
       this.#prevSearchBytes = bytes;
 
-      const pos = args.buffer.search(address, bytes);
+      const direction = params.direction ?? "forward";
+      const pos = args.buffer.search(
+        direction == "forward" ? address + 1 : address - 1,
+        bytes,
+        direction,
+      );
       if (pos >= 0) {
         await searchAddress(args.denops, this.#offset, pos);
       } else {
