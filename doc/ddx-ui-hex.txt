@@ -163,6 +163,7 @@ save
                                                     *ddx-ui-hex-action-search*
 search
 		Search the value from current address.
+		NOTE: It supports wildcard bytes(??) search when "hex" type.
 
 		params: See |ddx-ui-hex-action-change|.
 

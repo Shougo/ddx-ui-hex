@@ -99,7 +99,7 @@ export class Ui extends BaseUi<Params> {
   #selectedStartAddress: number = -1;
   #prevSize: number = 0;
   #savedBytes: Uint8Array = Uint8Array.from([]);
-  #prevSearchBytes: Uint8Array | null = null;
+  #prevSearchBytes: (number | null)[] | null = null;
 
   override async redraw(args: {
     denops: Denops;
@@ -333,7 +333,7 @@ export class Ui extends BaseUi<Params> {
         ? Math.abs(this.#selectedStartAddress - address) + 1
         : 1;
 
-      if (bytes.length === 1) {
+      if (bytes.length === 1 && bytes[0] !== null) {
         // Replace range by "bytes".
         args.buffer.changeBytes(
           rangeStart,
@@ -1612,7 +1612,7 @@ function stringToBytes(
   isLittle: boolean | undefined,
   isSigned: boolean | undefined,
   size: number | undefined,
-): Uint8Array | null {
+): (number | null)[] | null {
   // Fast hex conversion (lowercase)
   const hexTable = new Array<string>(256);
   for (let i = 0; i < 256; i++) {
@@ -1643,16 +1643,21 @@ function stringToBytes(
   return hexToBytes(bytesString);
 }
 
-// Parse hex string (e.g. "383838" -> [0x38, 0x38, 0x38])
-function hexToBytes(s: string): Uint8Array | null {
-  const clean = s.replace(/\s+/g, "");
+// Parse hex string with wildcards (e.g. "3838??" -> [0x38, 0x38, null])
+function hexToBytes(s: string): (number | null)[] | null {
+  const clean = s.replace(/\s+/g, "").toUpperCase(); // Clean and normalize
   if (clean.length === 0 || clean.length % 2 !== 0) return null;
-  const out = new Uint8Array(clean.length / 2);
-  for (let i = 0; i < out.length; i++) {
-    const byteStr = clean.slice(i * 2, i * 2 + 2);
-    const b = parseInt(byteStr, 16);
-    if (Number.isNaN(b) || b < 0 || b > 255) return null;
-    out[i] = b;
+
+  const out: (number | null)[] = [];
+  for (let i = 0; i < clean.length; i += 2) {
+    const byteStr = clean.slice(i, i + 2);
+    if (byteStr === "??") {
+      out.push(null); // `??` as wildcard
+    } else {
+      const b = parseInt(byteStr, 16);
+      if (Number.isNaN(b) || b < 0 || b > 255) return null; // Invalid byte
+      out.push(b); // Valid byte
+    }
   }
   return out;
 }
