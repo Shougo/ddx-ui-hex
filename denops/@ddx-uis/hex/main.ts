@@ -13,6 +13,7 @@ import {
   numberToUint8Array,
   printError,
   stringToUint8Array,
+  uint8ArrayToBase64,
 } from "@shougo/ddx-vim/utils";
 
 import type { Denops } from "@denops/std";
@@ -53,6 +54,7 @@ export type HighlightGroup = {
 
 export type SaveParams = {
   path?: string;
+  mode?: "base64" | "binary";
 };
 
 export type InputType =
@@ -874,13 +876,14 @@ export class Ui extends BaseUi<Params> {
       const isRange = this.#selectedStartAddress >= 0 &&
         address !== this.#selectedStartAddress;
       const path = params.path ?? "";
-      const abspath = isAbsolute(path)
+      const abspath = path.length === 0
+        ? args.buffer.getPath()
+        : isAbsolute(path)
         ? path
         : resolve(join(await fn.getcwd(args.denops), path));
+      const mode = params.mode ?? "binary";
+      let bytes = args.buffer.getBytes(0, args.buffer.getSize());
       if (isRange) {
-        const rangeStart = Math.min(address, this.#selectedStartAddress);
-        const rangeLength = Math.abs(this.#selectedStartAddress - address) + 1;
-
         if (path.length === 0) {
           await printError(
             args.denops,
@@ -890,19 +893,31 @@ export class Ui extends BaseUi<Params> {
           return ActionFlags.Persist;
         }
 
-        const file = await Deno.open(abspath, { write: true, create: true });
+        const rangeStart = Math.min(address, this.#selectedStartAddress);
+        const rangeLength = Math.abs(this.#selectedStartAddress - address) + 1;
 
-        try {
-          const bytes = args.buffer.getBytes(rangeStart, rangeLength);
+        bytes = args.buffer.getBytes(rangeStart, rangeLength);
+      }
 
+      args.buffer.stopAllFileWatchers();
+
+      const file = await Deno.open(abspath, { write: true, create: true });
+
+      try {
+        if (mode === "base64") {
+          const base64 = uint8ArrayToBase64(bytes);
+          const encodedBase64 = new TextEncoder().encode(base64);
+
+          await file.write(encodedBase64);
+          await file.truncate(base64.length);
+        } else {
           await file.write(bytes);
-
           await file.truncate(bytes.length);
-        } finally {
-          file.close();
         }
-      } else {
-        await args.buffer.write(path);
+      } finally {
+        file.close();
+
+        args.buffer.startFileWatcher(args.buffer.getPath());
       }
 
       await args.denops.call(

@@ -57,10 +57,10 @@ change
 		params:
 			{type}: Value type.
 
-				"hex": hexa decimal string (Default)
-				"string": string
-				"number": number
-				"floating": floating
+				"hex": Hexa decimal string (Default)
+				"string": String
+				"number": Number
+				"floating": Floating
 
 			{isLittle}: Is little endian.
 
@@ -159,6 +159,11 @@ save
 
 		params:
 			{path}: Save filename path.
+
+			{mode}: Save file mode.
+
+				"binary": Binary file (Default)
+				"base64": BASE64 text file
 
                                                     *ddx-ui-hex-action-search*
 search
