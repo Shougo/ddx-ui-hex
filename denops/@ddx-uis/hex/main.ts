@@ -26,6 +26,48 @@ import { join } from "@std/path/join";
 import { resolve } from "@std/path/resolve";
 import { isAbsolute } from "@std/path/is-absolute";
 
+// ---------------------------------------------------------------------------
+// Module-level precomputed tables (avoid per-call allocations on hot paths)
+// ---------------------------------------------------------------------------
+
+/** Two-hex-digit string for every byte value 0x00–0xff. */
+const HEX_TABLE: readonly string[] = Array.from(
+  { length: 256 },
+  (_, i) => i.toString(16).padStart(2, "0"),
+);
+
+/**
+ * Padding strings for incomplete 16-byte rows.
+ * Index = number of missing bytes (0–16); value = " ".repeat(missing * 3).
+ */
+const PADDING_TABLE: readonly string[] = Array.from(
+  { length: 17 },
+  (_, missing) => " ".repeat(missing * 3),
+);
+
+/** CRC-32 polynomial lookup table (IEEE 802.3). */
+const CRC32_TABLE: Uint32Array = (() => {
+  const table = new Uint32Array(256);
+  for (let i = 0; i < 256; i++) {
+    let c = i;
+    for (let j = 0; j < 8; j++) {
+      c = (c & 1) ? (0xedb88320 ^ (c >>> 1)) : (c >>> 1);
+    }
+    table[i] = c;
+  }
+  return table;
+})();
+
+/** Format a Uint8Array as a space-separated lowercase hex string. */
+function arrayBufferToHexFast(buf: Uint8Array): string {
+  let s = "";
+  for (let i = 0; i < buf.length; i++) {
+    s += HEX_TABLE[buf[i]];
+    if (i !== buf.length - 1) s += " ";
+  }
+  return s;
+}
+
 export type FloatingBorder =
   | "none"
   | "single"
@@ -120,7 +162,8 @@ export class Ui extends BaseUi<Params> {
         await fn.bufnr(args.denops, bufferName));
     const bufnr = initialized ||
       await this.#initBuffer(args.denops, bufferName);
-    const winid = await fn.bufwinid(args.denops, bufnr);
+    let winid = await fn.bufwinid(args.denops, bufnr);
+    const wasWindowClosed = winid < 0;
 
     const hasNvim = args.denops.meta.host == "nvim";
     const floating = args.uiParams.split == "floating" && hasNvim;
@@ -163,12 +206,14 @@ export class Ui extends BaseUi<Params> {
         );
         return;
       }
+      // Re-fetch winid after the window was freshly opened.
+      winid = await fn.bufwinid(args.denops, bufnr);
     }
 
     await this.#setDefaultParams(args.denops, args.uiParams);
 
     // NOTE: buffers may be restored
-    if (!this.#buffers[args.options.name] || winid < 0) {
+    if (!this.#buffers[args.options.name] || wasWindowClosed) {
       await this.#initOptions(args.denops, args.options, args.uiParams, bufnr);
     }
 
@@ -177,7 +222,7 @@ export class Ui extends BaseUi<Params> {
       args.denops,
       args.options,
       args.uiParams,
-      await fn.bufwinid(args.denops, bufnr),
+      winid,
       `ddx-ui-hex-${bufnr}`,
       size,
     );
@@ -326,14 +371,7 @@ export class Ui extends BaseUi<Params> {
         return ActionFlags.Persist;
       }
 
-      const isRange = this.#selectedStartAddress >= 0 &&
-        address !== this.#selectedStartAddress;
-      const rangeStart = isRange
-        ? Math.min(address, this.#selectedStartAddress)
-        : address;
-      const rangeLength = isRange
-        ? Math.abs(this.#selectedStartAddress - address) + 1
-        : 1;
+      const { isRange, rangeStart, rangeLength } = this.#getRange(address);
 
       if (bytes.length === 1 && bytes[0] !== null) {
         // Replace range by "bytes".
@@ -378,8 +416,7 @@ export class Ui extends BaseUi<Params> {
         return ActionFlags.Persist;
       }
 
-      const isRange = this.#selectedStartAddress >= 0 &&
-        address !== this.#selectedStartAddress;
+      const { isRange, rangeStart, rangeLength } = this.#getRange(address);
       if (!isRange) {
         await printError(
           args.denops,
@@ -387,9 +424,6 @@ export class Ui extends BaseUi<Params> {
         );
         return ActionFlags.Persist;
       }
-
-      const rangeStart = Math.min(address, this.#selectedStartAddress);
-      const rangeLength = Math.abs(this.#selectedStartAddress - address) + 1;
 
       const bytes = args.buffer.getBytes(rangeStart, rangeLength);
 
@@ -400,18 +434,18 @@ export class Ui extends BaseUi<Params> {
       } as const;
 
       const sum = params.method === "sum"
-        ? calculateChecksum(Array.from(bytes))
+        ? calculateChecksum(bytes)
         : params.method && params.method in methodMap
         ? await calculateHash(
-          Array.from(bytes),
+          bytes,
           methodMap[params.method as keyof typeof methodMap],
         )
         : params.method === "crc-8"
-        ? calculateCRC8(Array.from(bytes))
+        ? calculateCRC8(bytes)
         : params.method === "crc-16"
-        ? calculateCRC16(Array.from(bytes))
+        ? calculateCRC16(bytes)
         : params.method === "crc-32"
-        ? calculateCRC32(Array.from(bytes))
+        ? calculateCRC32(bytes)
         : "Invalid method";
 
       await args.denops.call(
@@ -439,14 +473,7 @@ export class Ui extends BaseUi<Params> {
         return ActionFlags.Persist;
       }
 
-      const isRange = this.#selectedStartAddress >= 0 &&
-        address !== this.#selectedStartAddress;
-      const rangeStart = isRange
-        ? Math.min(address, this.#selectedStartAddress)
-        : address;
-      const rangeLength = isRange
-        ? Math.abs(this.#selectedStartAddress - address) + 1
-        : 1;
+      const { rangeStart, rangeLength } = this.#getRange(address);
 
       this.#savedBytes = args.buffer.getBytes(rangeStart, rangeLength);
 
@@ -524,14 +551,7 @@ export class Ui extends BaseUi<Params> {
         return ActionFlags.Persist;
       }
 
-      const isRange = this.#selectedStartAddress >= 0 &&
-        address !== this.#selectedStartAddress;
-      const rangeStart = isRange
-        ? Math.min(address, this.#selectedStartAddress)
-        : address;
-      const rangeLength = isRange
-        ? Math.abs(this.#selectedStartAddress - address) + 1
-        : 1;
+      const { rangeStart, rangeLength } = this.#getRange(address);
 
       if (params.type === "string") {
         await args.denops.call(
@@ -775,14 +795,7 @@ export class Ui extends BaseUi<Params> {
         return ActionFlags.Persist;
       }
 
-      const isRange = this.#selectedStartAddress >= 0 &&
-        address !== this.#selectedStartAddress;
-      const rangeStart = isRange
-        ? Math.min(address, this.#selectedStartAddress)
-        : address;
-      const rangeLength = isRange
-        ? Math.abs(this.#selectedStartAddress - address) + 1
-        : 1;
+      const { rangeStart, rangeLength } = this.#getRange(address);
       this.#savedBytes = args.buffer.remove(rangeStart, rangeLength);
 
       const bufnr = this.#buffers[args.options.name];
@@ -1143,17 +1156,10 @@ export class Ui extends BaseUi<Params> {
 
       const type = params.type ?? "hex";
 
-      const isRange = this.#selectedStartAddress >= 0 &&
-        address !== this.#selectedStartAddress;
-      const rangeStart = isRange
-        ? Math.min(address, this.#selectedStartAddress)
-        : address;
-      const rangeLength = isRange
-        ? Math.abs(this.#selectedStartAddress - address) + 1
-        : 1;
+      const { rangeStart, rangeLength } = this.#getRange(address);
 
       const text = (type === "hex")
-        ? args.buffer.getBytes(rangeStart, rangeLength).toString(16)
+        ? arrayBufferToHexFast(args.buffer.getBytes(rangeStart, rangeLength))
         : args.buffer.getChars(rangeStart, rangeLength);
 
       await fn.setreg(args.denops, '"', text, "v");
@@ -1252,7 +1258,6 @@ export class Ui extends BaseUi<Params> {
       await fn.setwinvar(denops, winid, "&signcolumn", "no");
       await fn.setwinvar(denops, winid, "&spell", 0);
       await fn.setwinvar(denops, winid, "&wrap", 0);
-      await fn.setwinvar(denops, winid, "&signcolumn", "no");
       if (existsWinFixBuf && uiParams.split !== "no") {
         await fn.setwinvar(denops, winid, "&winfixbuf", true);
       }
@@ -1281,13 +1286,14 @@ export class Ui extends BaseUi<Params> {
         (await denops.call("eval", "&lines") as number) / 2 - 10,
       );
     }
-    if (uiParams.winCol == 0) {
-      uiParams.winCol = Math.trunc(
-        (await op.columns.getGlobal(denops)) / 4,
-      );
-    }
-    if (uiParams.winWidth == 0) {
-      uiParams.winWidth = Math.trunc((await op.columns.getGlobal(denops)) / 2);
+    if (uiParams.winCol == 0 || uiParams.winWidth == 0) {
+      const columns = await op.columns.getGlobal(denops);
+      if (uiParams.winCol == 0) {
+        uiParams.winCol = Math.trunc(columns / 4);
+      }
+      if (uiParams.winWidth == 0) {
+        uiParams.winWidth = Math.trunc(columns / 2);
+      }
     }
   }
 
@@ -1297,6 +1303,22 @@ export class Ui extends BaseUi<Params> {
     ) as string[];
 
     return Number(addressString);
+  }
+
+  /** Compute the selected range from the current address.
+   *  When no range is active, rangeLength defaults to 1 (single byte). */
+  #getRange(
+    address: number,
+  ): { isRange: boolean; rangeStart: number; rangeLength: number } {
+    const isRange = this.#selectedStartAddress >= 0 &&
+      address !== this.#selectedStartAddress;
+    const rangeStart = isRange
+      ? Math.min(address, this.#selectedStartAddress)
+      : address;
+    const rangeLength = isRange
+      ? Math.abs(this.#selectedStartAddress - address) + 1
+      : 1;
+    return { isRange, rangeStart, rangeLength };
   }
 }
 
@@ -1310,8 +1332,6 @@ async function searchAddress(
   if (row < 0) {
     return;
   }
-
-  await fn.cursor(denops, 1, 1);
 
   const baseAddress = (offset + address).toString(16).padStart(8, "0").slice(
     -8,
@@ -1353,20 +1373,6 @@ export async function renderBufferFast(
   let start = startOffset;
   let lnum = lnumStart; // 1-based line number in vim
 
-  // NOTE: small fast helpers
-  const hexTable = new Array(256);
-  for (let i = 0; i < 256; i++) {
-    hexTable[i] = i.toString(16).padStart(2, "0");
-  }
-  const arrayBufferToHexFast = (buf: Uint8Array) => {
-    let s = "";
-    for (let i = 0; i < buf.length; i++) {
-      s += hexTable[buf[i]];
-      if (i !== buf.length - 1) s += " ";
-    }
-    return s;
-  };
-
   const changedOffsets = new Set<number>();
   const addedOffsets = new Set<number>();
   const deletedOffsets = new Set<number>();
@@ -1402,7 +1408,7 @@ export async function renderBufferFast(
 
     const addressString = start.toString(16).padStart(8, "0").slice(-8);
     const hex = arrayBufferToHexFast(bytes);
-    const padding = " ".repeat((16 - bytes.length) * 3);
+    const padding = PADDING_TABLE[16 - bytes.length];
 
     lines.push(`${addressString}: ${hex}${padding} |   ${ascii}`);
 
@@ -1628,12 +1634,6 @@ function stringToBytes(
   isSigned: boolean | undefined,
   size: number | undefined,
 ): (number | null)[] | null {
-  // Fast hex conversion (lowercase)
-  const hexTable = new Array<string>(256);
-  for (let i = 0; i < 256; i++) {
-    hexTable[i] = i.toString(16).padStart(2, "0");
-  }
-
   let bytesString = raw;
 
   if (type === "string") {
@@ -1643,7 +1643,7 @@ function stringToBytes(
       encoding,
     );
 
-    bytesString = Array.from(bytes, (b) => hexTable[b]).join("");
+    bytesString = Array.from(bytes, (b) => HEX_TABLE[b]).join("");
   } else if (type === "number" || type === "floating") {
     const bytes = numberToUint8Array(
       Number(raw),
@@ -1652,7 +1652,7 @@ function stringToBytes(
       isSigned ?? false,
     );
 
-    bytesString = Array.from(bytes, (b) => hexTable[b]).join("");
+    bytesString = Array.from(bytes, (b) => HEX_TABLE[b]).join("");
   }
 
   return hexToBytes(bytesString);
@@ -1677,7 +1677,7 @@ function hexToBytes(s: string): (number | null)[] | null {
   return out;
 }
 
-function calculateChecksum(data: number[]): number {
+function calculateChecksum(data: Uint8Array): number {
   let sum = 0;
   for (const byte of data) {
     sum += byte;
@@ -1685,22 +1685,10 @@ function calculateChecksum(data: number[]): number {
   return sum & 0xff;
 }
 
-function calculateCRC32(data: number[]): string {
-  const table = new Uint32Array(256);
-
-  for (let i = 0; i < 256; i++) {
-    let c = i;
-    for (let j = 0; j < 8; j++) {
-      c = (c & 1) ? (0xedb88320 ^ (c >>> 1)) : (c >>> 1);
-    }
-    table[i] = c;
-  }
-
-  const byteArray = new Uint8Array(data);
-
+function calculateCRC32(data: Uint8Array): string {
   let crc = 0xffffffff;
-  for (const byte of byteArray) {
-    crc = table[(crc ^ byte) & 0xff] ^ (crc >>> 8);
+  for (const byte of data) {
+    crc = CRC32_TABLE[(crc ^ byte) & 0xff] ^ (crc >>> 8);
   }
 
   crc ^= 0xffffffff;
@@ -1708,13 +1696,11 @@ function calculateCRC32(data: number[]): string {
   return (crc >>> 0).toString(16).padStart(8, "0").toUpperCase();
 }
 
-function calculateCRC16(data: number[]): string {
+function calculateCRC16(data: Uint8Array): string {
   const POLYNOMIAL = 0x1021;
   let crc = 0xffff;
 
-  const byteArray = new Uint8Array(data);
-
-  for (const byte of byteArray) {
+  for (const byte of data) {
     crc ^= byte << 8;
     for (let j = 0; j < 8; j++) {
       if (crc & 0x8000) {
@@ -1729,13 +1715,11 @@ function calculateCRC16(data: number[]): string {
   return crc.toString(16).padStart(4, "0").toUpperCase();
 }
 
-function calculateCRC8(data: number[]): string {
+function calculateCRC8(data: Uint8Array): string {
   const POLYNOMIAL = 0x07;
   let crc = 0x00;
 
-  const byteArray = new Uint8Array(data);
-
-  for (const byte of byteArray) {
+  for (const byte of data) {
     crc ^= byte;
     for (let j = 0; j < 8; j++) {
       crc = (crc & 0x80) ? ((crc << 1) ^ POLYNOMIAL) : (crc << 1);
@@ -1747,12 +1731,10 @@ function calculateCRC8(data: number[]): string {
 }
 
 async function calculateHash(
-  data: number[],
+  data: Uint8Array,
   algorithm: "MD5" | "SHA-1" | "SHA-256",
 ): Promise<string> {
-  const byteArray = new Uint8Array(data);
-
-  const hashBuffer = await crypto.subtle.digest(algorithm, byteArray);
+  const hashBuffer = await crypto.subtle.digest(algorithm, data);
 
   return Array.from(new Uint8Array(hashBuffer))
     .map((b) => b.toString(16).padStart(2, "0"))
