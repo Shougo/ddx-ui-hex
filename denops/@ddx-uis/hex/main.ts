@@ -933,11 +933,12 @@ export class Ui extends BaseUi<Params> {
         args.buffer.startFileWatcher(args.buffer.getPath());
       }
 
+      const savedPath = params.path ??
+        (isRange ? abspath : args.buffer.getPath());
+
       await args.denops.call(
         "ddx#util#print",
-        `Saved to "${
-          params.path ?? isRange ? abspath : args.buffer.getPath()
-        }"`,
+        `Saved to "${savedPath}"`,
       );
 
       const bufnr = this.#buffers[args.options.name];
@@ -1347,6 +1348,69 @@ async function searchAddress(
   );
 }
 
+function formatHexRow(
+  address: number,
+  bytes: Uint8Array,
+  ascii: string = "",
+): string {
+  const addressString = address.toString(16).padStart(8, "0").slice(-8);
+
+  if (bytes.length === 0) {
+    return `${addressString}: `;
+  }
+
+  const hex = arrayBufferToHexFast(bytes);
+  const padding = PADDING_TABLE[16 - bytes.length];
+
+  return `${addressString}: ${hex}${padding} |   ${ascii}`;
+}
+
+function getByteHighlight(
+  byte: number,
+  rowAddress: number,
+  selectedStartAddress: number,
+  changedAddresses: Set<number>,
+  changedOffsets: Set<number>,
+  addedOffsets: Set<number>,
+  deletedOffsets: Set<number>,
+  highlights: HighlightGroup,
+): string {
+  if (selectedStartAddress == rowAddress) {
+    return highlights.selected ?? "Visual";
+  }
+  if (changedAddresses.has(rowAddress)) {
+    return highlights.changed ?? "ErrorMsg";
+  }
+  if (addedOffsets.has(rowAddress)) {
+    return highlights.diffAdd ?? "DiffAdd";
+  }
+  if (changedOffsets.has(rowAddress)) {
+    return highlights.diffChange ?? "DiffChange";
+  }
+  if (deletedOffsets.has(rowAddress)) {
+    return highlights.diffDelete ?? "DiffDelete";
+  }
+  if (byte === 0x00) {
+    return highlights.null ?? "";
+  }
+  if (byte === 0x09) {
+    return highlights.tab ?? "";
+  }
+  if (byte === 0x0a) {
+    return highlights.newLine ?? "";
+  }
+  if (0x01 <= byte && byte <= 0x1f) {
+    return highlights.null ?? "";
+  }
+  if (0x20 <= byte && byte <= 0x7f) {
+    return highlights.ascii ?? "";
+  }
+  if (0x80 <= byte && byte <= 0xfe) {
+    return highlights.escape ?? "";
+  }
+  return "";
+}
+
 export async function renderBufferFast(
   args: {
     denops: Denops;
@@ -1363,19 +1427,18 @@ export async function renderBufferFast(
   lnumStart: number,
   namespace: number,
   selectedStartAddress: number,
-  changedAdresses: Set<number>,
+  changedAddresses: Set<number>,
 ) {
   const lines: string[] = [];
-
-  // [lnum, colStart (0-based), len, hlGroup]
   const hlOps: Array<[number, number, number, string]> = [];
 
   let start = startOffset;
-  let lnum = lnumStart; // 1-based line number in vim
+  let lnum = lnumStart;
 
   const changedOffsets = new Set<number>();
   const addedOffsets = new Set<number>();
   const deletedOffsets = new Set<number>();
+
   if (args.options.anotherPath.length > 0) {
     const allBytes = args.buffer.getBytes(start, size);
     const allAnotherBytes = args.anotherBuffer.getBytes(start, size);
@@ -1398,7 +1461,7 @@ export async function renderBufferFast(
   }
 
   if (size === 0) {
-    lines.push(`${start.toString(16).padStart(8, "0").slice(-8)}: `);
+    lines.push(formatHexRow(start, new Uint8Array(), ""));
   }
 
   while (start < size) {
@@ -1406,51 +1469,27 @@ export async function renderBufferFast(
     const bytes = args.buffer.getBytes(start, len);
     const ascii = args.buffer.getChars(start, len, args.uiParams.encoding);
 
+    lines.push(formatHexRow(start, bytes, ascii));
+
     const addressString = start.toString(16).padStart(8, "0").slice(-8);
-    const hex = arrayBufferToHexFast(bytes);
-    const padding = PADDING_TABLE[16 - bytes.length];
-
-    lines.push(`${addressString}: ${hex}${padding} |   ${ascii}`);
-
-    // collect highlight ops for this line (no RPC here)
-    // column where bytes hex begin:
-    // addressString.length + 2 (": ") = 8 + 2 = 10 (0-based col used later)
     const hexStartCol = addressString.length + 2;
-    // But in original code they used addressString.length + 3 * row; adapt to
-    // 0-based col start for each byte hex (two hex digits + space)
+
     for (let i = 0; i < bytes.length; i++) {
       const byte = bytes[i];
-      let highlight = "";
       const rowAddress = start + i;
-      if (selectedStartAddress == rowAddress) {
-        highlight = args.uiParams.highlights.selected ?? "Visual";
-      } else if (changedAdresses.has(rowAddress)) {
-        highlight = args.uiParams.highlights.changed ?? "ErrorMsg";
-      } else if (addedOffsets.has(rowAddress)) {
-        highlight = args.uiParams.highlights.diffAdd ?? "DiffAdd";
-      } else if (changedOffsets.has(rowAddress)) {
-        highlight = args.uiParams.highlights.diffChange ?? "DiffChange";
-      } else if (deletedOffsets.has(rowAddress)) {
-        highlight = args.uiParams.highlights.diffDelete ?? "DiffDelete";
-      } else if (byte === 0x00) {
-        highlight = args.uiParams.highlights.null ?? "";
-      } else if (byte === 0x09) {
-        highlight = args.uiParams.highlights.tab ?? "";
-      } else if (byte === 0x0a) {
-        highlight = args.uiParams.highlights.newLine ?? "";
-      } else if (0x01 <= byte && byte <= 0x1f) {
-        highlight = args.uiParams.highlights.null ?? "";
-      } else if (0x20 <= byte && byte <= 0x7f) {
-        highlight = args.uiParams.highlights.ascii ?? "";
-      } else if (0x80 <= byte && byte <= 0xfe) {
-        highlight = args.uiParams.highlights.escape ?? "";
-      }
+      const highlight = getByteHighlight(
+        byte,
+        rowAddress,
+        selectedStartAddress,
+        changedAddresses,
+        changedOffsets,
+        addedOffsets,
+        deletedOffsets,
+        args.uiParams.highlights,
+      );
 
-      if (highlight && highlight.length > 0) {
-        // calculate column: hexStartCol + i*3 (two hex digits + space)
-        const colStart = hexStartCol + i * 3;
-        // highlight two columns (hex digits)
-        hlOps.push([lnum, colStart, 2, highlight]);
+      if (highlight.length > 0) {
+        hlOps.push([lnum, hexStartCol + i * 3, 2, highlight]);
       }
     }
 
@@ -1547,10 +1586,10 @@ async function setStatusline(
     statusState,
   );
 
-  const header = `[ddx-${options.name}]%m `;
+  const header = `[ddx-${options.name}] `;
 
   const linenr = [
-    "printf('%'.(('$'->line())->len()+2).'d/%d 0x%08x/0x%08x',",
+    "printf('%'.(('$'->line())->len()+1).'d/%d 0x%08x/0x%08x',",
     "'.'->line(),",
     "'$'->line(),",
     "ddx#ui#hex#_get_current_address()[1],",
