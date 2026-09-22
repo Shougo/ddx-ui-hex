@@ -2,7 +2,7 @@
 
 Hex UI for ddx.vim
 
-This UI is standard hex viewer.
+This UI is a standard hexadecimal viewer.
 
 ## Required
 

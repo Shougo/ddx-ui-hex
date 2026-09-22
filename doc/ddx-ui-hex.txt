@@ -19,7 +19,7 @@ Compatibility		|ddx-ui-hex-compatibility|
 ==============================================================================
 INTRODUCTION                                         *ddx-ui-hex-introduction*
 
-This UI is standard hexadecimal viewer.
+This UI is a standard hexadecimal viewer.
 
 
 ==============================================================================
