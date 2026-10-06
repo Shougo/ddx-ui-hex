@@ -156,7 +156,6 @@ resize
                                                       *ddx-ui-hex-action-save*
 save
 		Save current buffer to {path}.
-		If the address is selected, ranged bytes are saved.
 		If {path} is empty, the opened file path will be used.
 
 		params:
@@ -165,7 +164,6 @@ save
 			{mode}: Save file mode.
 
 				"binary": Binary file (Default)
-				"base64": BASE64 text file
 
                                                     *ddx-ui-hex-action-search*
 search

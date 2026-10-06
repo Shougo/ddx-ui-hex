@@ -13,7 +13,6 @@ import {
   numberToUint8Array,
   printError,
   stringToUint8Array,
-  uint8ArrayToBase64,
 } from "@shougo/ddx-vim/utils";
 
 import type { Denops } from "@denops/std";
@@ -96,7 +95,7 @@ export type HighlightGroup = {
 
 export type SaveParams = {
   path?: string;
-  mode?: "base64" | "binary";
+  mode?: "binary";
 };
 
 export type InputType =
@@ -355,14 +354,14 @@ export class Ui extends BaseUi<Params> {
         return ActionFlags.Persist;
       }
 
-      const bytes = stringToBytes(
+      const bytes = bytesArrayToUint8Array(stringToBytes(
         type,
         raw,
         args.uiParams.encoding,
         params.isLittle,
         params.isSigned,
         params.size,
-      );
+      ));
       if (bytes === null) {
         await printError(
           args.denops,
@@ -508,14 +507,14 @@ export class Ui extends BaseUi<Params> {
         return ActionFlags.Persist;
       }
 
-      const bytes = stringToBytes(
+      const bytes = bytesArrayToUint8Array(stringToBytes(
         type,
         raw,
         args.uiParams.encoding,
         params.isLittle,
         params.isSigned,
         params.size,
-      );
+      ));
       if (bytes === null) {
         await printError(
           args.denops,
@@ -575,7 +574,6 @@ export class Ui extends BaseUi<Params> {
           rangeStart,
           params.size ?? 4,
           params.isLittle ?? true,
-          params.isSigned ?? false,
         );
 
         await args.denops.call(
@@ -624,7 +622,7 @@ export class Ui extends BaseUi<Params> {
           return ActionFlags.Persist;
         }
 
-        const bufferSize = await args.buffer.getSize();
+        const bufferSize = args.buffer.getSize();
         address = Math.floor(bufferSize * (percentage / 100));
       } else if (/^[+-]\d+$/.test(input)) {
         // Offset
@@ -886,59 +884,27 @@ export class Ui extends BaseUi<Params> {
         return ActionFlags.Persist;
       }
 
-      const isRange = this.#selectedStartAddress >= 0 &&
-        address !== this.#selectedStartAddress;
       const path = params.path ?? "";
       const abspath = path.length === 0
         ? args.buffer.getPath()
         : isAbsolute(path)
         ? path
         : resolve(join(await fn.getcwd(args.denops), path));
-      const mode = params.mode ?? "binary";
-      let bytes = args.buffer.getBytes(0, args.buffer.getSize());
-      if (isRange) {
-        if (path.length === 0) {
-          await printError(
-            args.denops,
-            "Save file path is required",
-          );
-
-          return ActionFlags.Persist;
-        }
-
-        const rangeStart = Math.min(address, this.#selectedStartAddress);
-        const rangeLength = Math.abs(this.#selectedStartAddress - address) + 1;
-
-        bytes = args.buffer.getBytes(rangeStart, rangeLength);
-      }
-
-      args.buffer.stopAllFileWatchers();
-
-      const file = await Deno.open(abspath, { write: true, create: true });
 
       try {
-        if (mode === "base64") {
-          const base64 = uint8ArrayToBase64(bytes);
-          const encodedBase64 = new TextEncoder().encode(base64);
-
-          await file.write(encodedBase64);
-          await file.truncate(base64.length);
-        } else {
-          await file.write(bytes);
-          await file.truncate(bytes.length);
-        }
-      } finally {
-        file.close();
-
-        args.buffer.startFileWatcher(args.buffer.getPath());
+        await args.buffer.write(abspath);
+      } catch (e: unknown) {
+        await printError(
+          args.denops,
+          e,
+          `Save: ${abspath} failed`,
+        );
+        return ActionFlags.Persist;
       }
-
-      const savedPath = params.path ??
-        (isRange ? abspath : args.buffer.getPath());
 
       await args.denops.call(
         "ddx#util#print",
-        `Saved to "${savedPath}"`,
+        `Saved to "${abspath}"`,
       );
 
       const bufnr = this.#buffers[args.options.name];
@@ -1058,14 +1024,14 @@ export class Ui extends BaseUi<Params> {
         return ActionFlags.Persist;
       }
 
-      const oldBytes = stringToBytes(
+      const oldBytes = bytesArrayToUint8Array(stringToBytes(
         type,
         oldRaw,
         args.uiParams.encoding,
         params.isLittle,
         params.isSigned,
         params.size,
-      );
+      ));
       if (!oldBytes) {
         return ActionFlags.Persist;
       }
@@ -1697,6 +1663,16 @@ function stringToBytes(
   return hexToBytes(bytesString);
 }
 
+function bytesArrayToUint8Array(
+  bytes: (number | null)[] | null,
+): Uint8Array | null {
+  if (bytes === null || bytes.some((b) => b === null)) {
+    return null;
+  }
+
+  return new Uint8Array(bytes as number[]);
+}
+
 // Parse hex string with wildcards (e.g. "3838??" -> [0x38, 0x38, null])
 function hexToBytes(s: string): (number | null)[] | null {
   const clean = s.replace(/\s+/g, "").toUpperCase(); // Clean and normalize
@@ -1773,7 +1749,10 @@ async function calculateHash(
   data: Uint8Array,
   algorithm: "MD5" | "SHA-1" | "SHA-256",
 ): Promise<string> {
-  const hashBuffer = await crypto.subtle.digest(algorithm, data);
+  const hashBuffer = await crypto.subtle.digest(
+    algorithm,
+    data.buffer as ArrayBuffer,
+  );
 
   return Array.from(new Uint8Array(hashBuffer))
     .map((b) => b.toString(16).padStart(2, "0"))
